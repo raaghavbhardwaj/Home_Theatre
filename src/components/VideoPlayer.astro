@@ -24,33 +24,13 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
 <div class="flex flex-col gap-3 w-full" id="player-wrapper" data-api={apiUrl} data-title={title}>
   <!-- Controls & Quality Switcher Bar -->
   <div class="flex flex-wrap items-center justify-between gap-2 px-1 py-1 font-mono text-xs">
-    <div class="flex flex-wrap items-center gap-3">
-      <div class="flex flex-wrap items-center gap-1.5">
-        <span class="text-neutral-500 font-semibold uppercase text-[11px] flex items-center gap-1.5">
-          <span id="player-dot" class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-          <span id="player-status-text">RESOLVING STREAMS:</span>
-        </span>
-        <div id="quality-selector" class="flex flex-wrap items-center gap-1.5">
-          <!-- Injected dynamically via client script -->
-        </div>
-      </div>
-
-      <!-- Subtitles Selector -->
-      <div id="subtitle-control" class="hidden items-center gap-1.5 font-mono text-xs">
-        <span class="text-neutral-500 font-semibold uppercase text-[11px] flex items-center gap-1">
-          <svg class="w-3.5 h-3.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-            <rect x="2" y="4" width="20" height="16" rx="2"></rect>
-            <path d="M7 15h4M15 15h2M7 11h2M13 11h4"></path>
-          </svg>
-          CC:
-        </span>
-        <select
-          id="subtitle-select"
-          aria-label="Select subtitles"
-          class="bg-neutral-900 text-neutral-300 border border-neutral-800 rounded px-2 py-0.5 text-xs font-mono focus:outline-none focus:border-neutral-500 cursor-pointer hover:text-white transition-colors max-w-[160px] sm:max-w-[220px] truncate"
-        >
-          <option value="off">Off</option>
-        </select>
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-neutral-500 font-semibold uppercase text-[11px] flex items-center gap-1.5">
+        <span id="player-dot" class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+        <span id="player-status-text">RESOLVING STREAMS:</span>
+      </span>
+      <div id="quality-selector" class="flex flex-wrap items-center gap-1.5">
+        <!-- Injected dynamically via client script -->
       </div>
     </div>
 
@@ -171,8 +151,6 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
   const errorExternalBtn = document.getElementById('error-external-btn') as HTMLAnchorElement | null;
   const errorRetryBtn = document.getElementById('error-retry-btn') as HTMLButtonElement | null;
   const qualitySelector = document.getElementById('quality-selector');
-  const subtitleControl = document.getElementById('subtitle-control');
-  const subtitleSelect = document.getElementById('subtitle-select') as HTMLSelectElement | null;
   const playerDot = document.getElementById('player-dot');
   const statusText = document.getElementById('player-status-text');
   const activeBadge = document.getElementById('active-stream-badge');
@@ -239,27 +217,16 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
   }
 
   function setupSubtitles(subtitles?: SubtitleItem[]) {
-    if (!video || !subtitleControl || !subtitleSelect) return;
+    if (!video) return;
     cleanupSubtitles();
 
-    if (!Array.isArray(subtitles) || subtitles.length === 0) {
-      subtitleControl.classList.add('hidden');
-      subtitleControl.classList.remove('flex');
-      return;
-    }
+    if (!Array.isArray(subtitles) || subtitles.length === 0) return;
 
-    subtitleSelect.innerHTML = '<option value="off">Off</option>';
-
-    subtitles.forEach((sub, idx) => {
-      const opt = document.createElement('option');
-      opt.value = String(idx);
-      opt.textContent = sub.name || sub.language.toUpperCase();
-      subtitleSelect.appendChild(opt);
-
+    subtitles.forEach((sub) => {
       // Create native HTML5 track element pointing to WebVTT edge proxy
       const track = document.createElement('track');
       track.kind = 'subtitles';
-      track.label = sub.name || sub.language || 'Subtitles';
+      track.label = sub.name || sub.language.toUpperCase();
       track.srclang = sub.language || 'en';
       track.src = `/api/subtitles?url=${encodeURIComponent(sub.url)}`;
 
@@ -281,52 +248,6 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
       };
 
       video.appendChild(track);
-    });
-
-    subtitleControl.classList.remove('hidden');
-    subtitleControl.classList.add('flex');
-  }
-
-  function switchSubtitle(selectedIndex: number | 'off') {
-    if (!video) return;
-    const tracks = video.textTracks;
-
-    for (let i = 0; i < tracks.length; i++) {
-      if (selectedIndex !== 'off' && i === selectedIndex) {
-        tracks[i].mode = 'showing';
-      } else {
-        tracks[i].mode = 'disabled';
-      }
-    }
-
-    if (subtitleSelect) {
-      subtitleSelect.value = String(selectedIndex);
-    }
-  }
-
-  subtitleSelect?.addEventListener('change', () => {
-    if (!subtitleSelect) return;
-    const val = subtitleSelect.value;
-    if (val === 'off') {
-      switchSubtitle('off');
-    } else {
-      switchSubtitle(parseInt(val, 10));
-    }
-  });
-
-  // Sync state when user changes subtitles via browser's native [CC] button
-  if (video && video.textTracks) {
-    video.textTracks.addEventListener('change', () => {
-      if (!video || !subtitleSelect) return;
-      const tracks = video.textTracks;
-      let activeIdx: number | 'off' = 'off';
-      for (let i = 0; i < tracks.length; i++) {
-        if (tracks[i].mode === 'showing') {
-          activeIdx = i;
-          break;
-        }
-      }
-      subtitleSelect.value = String(activeIdx);
     });
   }
 
