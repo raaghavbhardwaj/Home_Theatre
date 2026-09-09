@@ -203,6 +203,8 @@ try {
         mediaType: 'movie' | 'tv';
         season?: number;
         episode?: number;
+        title?: string;
+        year?: number;
       }): Promise<StreamItem[]>;
     };
   }
@@ -428,6 +430,7 @@ try {
             mediaType,
             season: mediaType === 'tv' ? season : undefined,
             episode: mediaType === 'tv' ? episode : undefined,
+            title: title || undefined,
           });
           if (resolvedStreams.length > 0) {
             currentStreams = sortStreamsByQuality(resolvedStreams);
