@@ -212,7 +212,7 @@ try {
     if (win.CinejoyResolver) return Promise.resolve();
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = `${scraperUrl.replace(/\/+$/, '')}/resolver.js`;
+      script.src = `${scraperUrl.replace(/\/+$/, '')}/resolver.js?t=${Date.now()}`;
       script.async = true;
       script.onload = () => resolve();
       script.onerror = () => reject(new Error('Failed to load in-browser resolver script'));
