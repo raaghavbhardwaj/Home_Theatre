@@ -77,7 +77,6 @@ Adding a new streaming provider requires creating exactly **one file** and regis
 
    export const PROVIDERS: ScraperProvider[] = [
      vidsrcProvider,
-     cinejoyProvider,
      myNewProvider, // <- One-line addition
    ];
    ```

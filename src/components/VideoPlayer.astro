@@ -1,6 +1,4 @@
 ---
-import type { Stream } from '../lib/types';
-
 interface Props {
   id: number | string;
   imdbId?: string;
@@ -8,7 +6,6 @@ interface Props {
   season?: number;
   episode?: number;
   title: string;
-  streams?: Stream[];
 }
 
 const {
@@ -18,402 +15,107 @@ const {
   season = 1,
   episode = 1,
   title,
-  streams = [],
 } = Astro.props;
 
-// Pass initial streams as JSON data attribute
-const streamsJson = JSON.stringify(streams);
+// Build initial server URLs
+const isTv = mediaType === 'tv';
+const vidlinkUrl = isTv
+  ? `https://vidlink.pro/tv/${id}/${season}/${episode}?primaryColor=ffffff&secondaryColor=181818&iconColor=ffffff`
+  : `https://vidlink.pro/movie/${id}?primaryColor=ffffff&secondaryColor=181818&iconColor=ffffff`;
+
+const videasyUrl = isTv
+  ? `https://player.videasy.to/tv/${id}/${season}/${episode}`
+  : `https://player.videasy.to/movie/${id}`;
+
+const vidsrcUrl = isTv
+  ? `https://vidsrcme.ru/embed/tv?tmdb=${id}&season=${season}&episode=${episode}`
+  : `https://vidsrcme.ru/embed/movie?tmdb=${id}`;
 ---
 
-<div class="flex flex-col gap-3 w-full" id="player-container"
-  data-id={id}
-  data-imdb={imdbId}
-  data-type={mediaType}
-  data-season={season}
-  data-episode={episode}
-  data-streams={streamsJson}
->
-  <!-- Server & Quality Bar -->
+<div class="flex flex-col gap-3 w-full" id="player-wrapper">
+  <!-- Server Switcher Header -->
   <div class="flex flex-wrap items-center justify-between gap-2 px-1 py-1 font-mono text-xs">
     <div class="flex flex-wrap items-center gap-2">
       <span class="text-neutral-500 font-semibold uppercase text-[11px] flex items-center gap-1.5">
         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        SERVERS:
+        STREAM SERVERS:
       </span>
-      <div id="server-list" class="flex flex-wrap items-center gap-1.5">
-        <!-- Direct streams rendered here -->
-        {streams.map((s, idx) => (
-          <button
-            type="button"
-            class={`server-btn px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
-              idx === 0 
-                ? 'bg-neutral-200 text-black font-semibold' 
-                : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
-            }`}
-            data-type="direct"
-            data-index={idx}
-          >
-            {s.name} ({s.quality})
-          </button>
-        ))}
-
-        <!-- Fast Embed Backup Servers -->
+      <div id="server-selector" class="flex flex-wrap items-center gap-1.5">
         <button
-          id="btn-vidlink"
           type="button"
-          class={`server-btn px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
-            streams.length === 0
-              ? 'bg-neutral-200 text-black font-semibold'
-              : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
-          }`}
-          data-type="embed"
-          data-server="vidlink"
+          class="server-pill px-3 py-1 rounded text-xs transition-colors cursor-pointer bg-white text-black font-semibold"
+          data-url={vidlinkUrl}
+          data-name="Server 1 (VidLink)"
         >
-          VidLink (Stream)
+          Server 1 (VidLink)
         </button>
         <button
-          id="btn-videasy"
           type="button"
-          class="server-btn px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800"
-          data-type="embed"
-          data-server="videasy"
+          class="server-pill px-3 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800"
+          data-url={videasyUrl}
+          data-name="Server 2 (Videasy)"
         >
-          Videasy (Stream)
+          Server 2 (Videasy)
+        </button>
+        <button
+          type="button"
+          class="server-pill px-3 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800"
+          data-url={vidsrcUrl}
+          data-name="Server 3 (VidSrc)"
+        >
+          Server 3 (VidSrc)
         </button>
       </div>
     </div>
 
-    <!-- Mode Badge & Quick Controls Tip -->
-    <div class="flex items-center gap-2">
-      <span id="player-mode-badge" class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400">
-        HLS Native
-      </span>
-      <span class="text-neutral-600 text-[11px] hidden sm:inline">[F: Fullscreen | Space: Pause]</span>
+    <!-- Active Server Indicator & Tips -->
+    <div class="flex items-center gap-2 text-neutral-500 text-[11px] font-mono">
+      <span id="active-server-name" class="text-neutral-300 font-medium">Server 1 (VidLink)</span>
+      <span class="text-neutral-700">|</span>
+      <span>Click any server if stream stalls</span>
     </div>
   </div>
 
-  <!-- Player Screen Container -->
-  <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-[#222222] shadow-2xl flex items-center justify-center">
-    <!-- Native Video Element -->
-    <video
-      id="video-player"
-      class="w-full h-full object-contain"
-      controls
-      playsinline
-      crossorigin="anonymous"
-    >
-      <p class="text-neutral-500 p-4 text-xs">Your browser does not support HTML5 video.</p>
-    </video>
-
-    <!-- Fallback Embed Frame -->
+  <!-- Theater Player Container -->
+  <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-[#222222] shadow-2xl">
+    <!-- Active Responsive Video Player Frame -->
     <iframe
-      id="embed-frame"
-      class="w-full h-full border-0 hidden"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+      id="main-player-frame"
+      src={vidlinkUrl}
+      class="w-full h-full border-0 absolute inset-0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
       referrerpolicy="no-referrer"
       allowfullscreen
     ></iframe>
-
-    <!-- Loading Spinner & Status Overlay -->
-    <div id="player-overlay" class="absolute inset-0 bg-black/80 backdrop-blur-xs flex flex-col items-center justify-center gap-3 pointer-events-none transition-opacity duration-300 opacity-0 hidden">
-      <div class="w-8 h-8 border-2 border-neutral-600 border-t-white rounded-full animate-spin"></div>
-      <span id="player-status-text" class="font-mono text-xs text-neutral-300">Connecting stream...</span>
-    </div>
-
-    <!-- Error Banner -->
-    <div id="player-error" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center gap-3 p-6 text-center hidden">
-      <span class="text-red-500 font-mono text-xs font-semibold">[STREAM PLAYBACK NOTICE]</span>
-      <p class="text-neutral-400 text-xs max-w-md font-sans">
-        The selected direct server could not connect. Auto-switching to backup server...
-      </p>
-      <div class="flex flex-wrap items-center justify-center gap-3 mt-2">
-        <button id="err-btn-vidlink" type="button" class="px-3 py-1.5 bg-white text-black font-mono text-xs font-semibold rounded hover:bg-neutral-200 transition-colors cursor-pointer">
-          Play with VidLink
-        </button>
-        <button id="err-btn-videasy" type="button" class="px-3 py-1.5 bg-neutral-800 text-white font-mono text-xs rounded hover:bg-neutral-700 transition-colors cursor-pointer">
-          Play with Videasy
-        </button>
-      </div>
-    </div>
   </div>
 </div>
 
 <script>
-  import Hls from 'hls.js';
+  // Vanilla JS Instant Server Switcher
+  const buttons = document.querySelectorAll<HTMLButtonElement>('.server-pill');
+  const iframe = document.getElementById('main-player-frame') as HTMLIFrameElement | null;
+  const activeLabel = document.getElementById('active-server-name');
 
-  interface StreamItem {
-    name: string;
-    title: string;
-    url: string;
-    quality: string;
-    format?: string;
-  }
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetUrl = btn.dataset.url;
+      const serverName = btn.dataset.name || 'Server';
 
-  const container = document.getElementById('player-container');
-  const video = document.getElementById('video-player') as HTMLVideoElement | null;
-  const embedFrame = document.getElementById('embed-frame') as HTMLIFrameElement | null;
-  const serverList = document.getElementById('server-list');
-  const modeBadge = document.getElementById('player-mode-badge');
-  const overlay = document.getElementById('player-overlay');
-  const statusText = document.getElementById('player-status-text');
-  const errorBox = document.getElementById('player-error');
-  const errBtnVidLink = document.getElementById('err-btn-vidlink');
-  const errBtnVideasy = document.getElementById('err-btn-videasy');
-
-  if (container && video) {
-    const id = container.dataset.id || '';
-    const imdb = container.dataset.imdb || '';
-    const mediaType = container.dataset.type || 'movie';
-    const season = container.dataset.season || '1';
-    const episode = container.dataset.episode || '1';
-    
-    let streams: StreamItem[] = [];
-    try {
-      streams = JSON.parse(container.dataset.streams || '[]');
-    } catch {
-      streams = [];
-    }
-
-    let hls: Hls | null = null;
-    let currentStreamIndex = 0;
-    let currentMode: 'direct' | 'vidlink' | 'videasy' = 'direct';
-    let watchdogTimer: number | undefined;
-
-    function showStatus(text: string) {
-      if (overlay && statusText) {
-        statusText.textContent = text;
-        overlay.classList.remove('hidden');
-        overlay.classList.remove('opacity-0');
+      if (iframe && targetUrl) {
+        iframe.src = targetUrl;
       }
-    }
 
-    function hideStatus() {
-      if (overlay) {
-        overlay.classList.add('opacity-0');
-        setTimeout(() => overlay.classList.add('hidden'), 200);
+      if (activeLabel) {
+        activeLabel.textContent = serverName;
       }
-    }
 
-    function showError() {
-      hideStatus();
-      if (errorBox) errorBox.classList.remove('hidden');
-    }
-
-    function hideError() {
-      if (errorBox) errorBox.classList.add('hidden');
-    }
-
-    function updateActiveButton(type: 'direct' | 'embed', targetIndexOrServer: number | string) {
-      if (!serverList) return;
-      serverList.querySelectorAll<HTMLButtonElement>('.server-btn').forEach((btn) => {
-        const btnType = btn.dataset.type;
-        const btnIndex = Number(btn.dataset.index);
-        const btnServer = btn.dataset.server;
-
-        const isMatch = (type === 'direct' && btnType === 'direct' && btnIndex === targetIndexOrServer) ||
-                        (type === 'embed' && btnType === 'embed' && btnServer === targetIndexOrServer);
-
-        if (isMatch) {
-          btn.className = 'server-btn px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-200 text-black font-semibold';
+      buttons.forEach((b) => {
+        if (b === btn) {
+          b.className = 'server-pill px-3 py-1 rounded text-xs transition-colors cursor-pointer bg-white text-black font-semibold';
         } else {
-          btn.className = 'server-btn px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800';
+          b.className = 'server-pill px-3 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800';
         }
       });
-    }
-
-    function switchToEmbed(serverName: 'vidlink' | 'videasy' = 'vidlink') {
-      window.clearTimeout(watchdogTimer);
-      currentMode = serverName;
-      hideError();
-      hideStatus();
-
-      if (hls) {
-        hls.destroy();
-        hls = null;
-      }
-      if (video) {
-        video.pause();
-        video.classList.add('hidden');
-      }
-
-      if (embedFrame) {
-        let embedUrl = '';
-        if (serverName === 'vidlink') {
-          embedUrl = mediaType === 'tv'
-            ? `https://vidlink.pro/tv/${id}/${season}/${episode}?primaryColor=ffffff&secondaryColor=111111`
-            : `https://vidlink.pro/movie/${id}?primaryColor=ffffff&secondaryColor=111111`;
-        } else {
-          embedUrl = mediaType === 'tv'
-            ? `https://player.videasy.to/tv/${id}/${season}/${episode}`
-            : `https://player.videasy.to/movie/${id}`;
-        }
-        embedFrame.src = embedUrl;
-        embedFrame.classList.remove('hidden');
-      }
-
-      if (modeBadge) {
-        modeBadge.textContent = serverName === 'vidlink' ? 'VidLink Engine' : 'Videasy Engine';
-      }
-
-      updateActiveButton('embed', serverName);
-    }
-
-    function playDirectStream(index: number) {
-      window.clearTimeout(watchdogTimer);
-      hideError();
-
-      if (!streams || streams.length === 0 || index >= streams.length) {
-        switchToEmbed('vidlink');
-        return;
-      }
-
-      currentMode = 'direct';
-      currentStreamIndex = index;
-      const targetStream = streams[index];
-      updateActiveButton('direct', index);
-
-      if (modeBadge) {
-        modeBadge.textContent = `HLS (${targetStream.quality})`;
-      }
-
-      if (embedFrame) {
-        embedFrame.src = 'about:blank';
-        embedFrame.classList.add('hidden');
-      }
-      if (video) {
-        video.classList.remove('hidden');
-      }
-
-      showStatus(`Connecting ${targetStream.name} (${targetStream.quality})...`);
-
-      const url = targetStream.url;
-      const isM3u8 = url.includes('.m3u8') || targetStream.format === 'm3u8';
-      const currentTime = video?.currentTime || 0;
-
-      // Watchdog: If stream does not play within 4.5 seconds, auto-switch to next server
-      watchdogTimer = window.setTimeout(() => {
-        if (video && video.readyState < 2) {
-          console.warn('[Player] Watchdog timeout on stream', index, 'Auto-advancing...');
-          advanceToNext();
-        }
-      }, 4500);
-
-      function advanceToNext() {
-        window.clearTimeout(watchdogTimer);
-        if (hls) {
-          hls.destroy();
-          hls = null;
-        }
-        if (currentStreamIndex + 1 < streams.length) {
-          showStatus(`Switching to next server (${streams[currentStreamIndex + 1].name})...`);
-          setTimeout(() => playDirectStream(currentStreamIndex + 1), 300);
-        } else {
-          switchToEmbed('vidlink');
-        }
-      }
-
-      if (Hls.isSupported() && isM3u8) {
-        if (hls) {
-          hls.destroy();
-        }
-        hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          backBufferLength: 90,
-          manifestLoadingTimeOut: 4000,
-          levelLoadingTimeOut: 4000,
-        });
-
-        hls.loadSource(url);
-        hls.attachMedia(video!);
-
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          window.clearTimeout(watchdogTimer);
-          hideStatus();
-          if (currentTime > 0) video!.currentTime = currentTime;
-          video?.play().catch(() => {});
-        });
-
-        hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (data.fatal) {
-            console.warn('[HLS] Fatal error on stream index', currentStreamIndex, data);
-            advanceToNext();
-          }
-        });
-      } else if (video!.canPlayType('application/vnd.apple.mpegurl') || !isM3u8) {
-        video!.src = url;
-        video!.addEventListener('loadeddata', () => {
-          window.clearTimeout(watchdogTimer);
-          hideStatus();
-          if (currentTime > 0) video!.currentTime = currentTime;
-          video!.play().catch(() => {});
-        }, { once: true });
-        video!.addEventListener('error', () => {
-          advanceToNext();
-        }, { once: true });
-      } else {
-        advanceToNext();
-      }
-    }
-
-    // Bind server buttons
-    function bindServerButtons() {
-      if (!serverList) return;
-      serverList.querySelectorAll<HTMLButtonElement>('.server-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const type = btn.dataset.type;
-          if (type === 'embed') {
-            const server = (btn.dataset.server || 'vidlink') as 'vidlink' | 'videasy';
-            switchToEmbed(server);
-          } else {
-            const idx = Number(btn.dataset.index || 0);
-            playDirectStream(idx);
-          }
-        });
-      });
-    }
-
-    bindServerButtons();
-
-    errBtnVidLink?.addEventListener('click', () => switchToEmbed('vidlink'));
-    errBtnVideasy?.addEventListener('click', () => switchToEmbed('videasy'));
-
-    // Keyboard Hotkeys (Only active when in direct video mode)
-    window.addEventListener('keydown', (e) => {
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
-        return;
-      }
-
-      if (currentMode === 'direct' && video) {
-        if (e.key === ' ') {
-          e.preventDefault();
-          if (video.paused) video.play();
-          else video.pause();
-        } else if (e.key === 'f' || e.key === 'F') {
-          e.preventDefault();
-          if (!document.fullscreenElement) {
-            video.requestFullscreen().catch(() => {});
-          } else {
-            document.exitFullscreen().catch(() => {});
-          }
-        } else if (e.key === 'm' || e.key === 'M') {
-          e.preventDefault();
-          video.muted = !video.muted;
-        } else if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          video.currentTime += 10;
-        } else if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          video.currentTime = Math.max(0, video.currentTime - 10);
-        }
-      }
     });
-
-    // Initial Play: If direct streams exist, start with stream 0, else start with VidLink
-    if (streams.length > 0) {
-      playDirectStream(0);
-    } else {
-      switchToEmbed('vidlink');
-    }
-  }
+  });
 </script>

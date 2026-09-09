@@ -7,14 +7,12 @@ import { SCRAPER_TIMEOUT_MS } from '../constants';
 import type { Stream } from '../types';
 import type { ScraperProvider } from './types';
 import { vidsrcProvider } from './vidsrc';
-import { cinejoyProvider } from './cinejoy';
 
 /**
  * Registry of all available stream providers.
  * To add a new provider in the future, just add it to this array.
  */
 export const PROVIDERS: ScraperProvider[] = [
-  cinejoyProvider,
   vidsrcProvider,
 ];
 

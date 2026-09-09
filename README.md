@@ -29,7 +29,6 @@ src/
 │   └── providers/          # Layer 2 & 3: Pluggable Scrapers & Aggregator
 │       ├── types.ts        # ScraperProvider contract
 │       ├── vidsrc.ts       # VidSrc scraper implementation
-│       ├── cinejoy.ts      # Cinejoy scraper implementation
 │       └── index.ts        # Aggregator: concurrency, timeout, deduplication
 ├── pages/
 │   ├── index.astro         # Layer 5: High-density catalog & category filters
@@ -82,7 +81,6 @@ import { myScraper } from './myScraper';
 
 export const PROVIDERS: ScraperProvider[] = [
   vidsrcProvider,
-  cinejoyProvider,
   myScraper, // Done!
 ];
 ```

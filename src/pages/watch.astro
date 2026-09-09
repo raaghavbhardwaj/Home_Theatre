@@ -3,8 +3,7 @@ import Layout from '../layouts/Layout.astro';
 import VideoPlayer from '../components/VideoPlayer.astro';
 import EpisodePicker from '../components/EpisodePicker.astro';
 import { getMediaDetails, getSeasonEpisodes, resolveByImdbId } from '../lib/tmdb';
-import { getAggregatedStreams } from '../lib/providers';
-import type { Episode, MediaDetails, Stream } from '../lib/types';
+import type { Episode, MediaDetails } from '../lib/types';
 
 const imdbParam = Astro.url.searchParams.get('imdb');
 const idParam = Astro.url.searchParams.get('id');
@@ -47,19 +46,6 @@ if (mediaType === 'tv') {
   episodes = await getSeasonEpisodes(details.id, seasonParam);
 }
 
-// Fetch initial streams concurrently with failover
-let initialStreams: Stream[] = [];
-try {
-  initialStreams = await getAggregatedStreams({
-    tmdbId: details.id,
-    imdbId,
-    type: mediaType,
-    season: mediaType === 'tv' ? seasonParam : undefined,
-    episode: mediaType === 'tv' ? episodeParam : undefined,
-  });
-} catch {
-  initialStreams = [];
-}
 
 const currentEpisodeTitle = mediaType === 'tv' 
   ? episodes.find((e) => e.episode_number === episodeParam)?.name 
@@ -120,7 +106,6 @@ const year = details.release_date ? details.release_date.substring(0, 4) : '';
       season={seasonParam}
       episode={episodeParam}
       title={details.title}
-      streams={initialStreams}
     />
 
     <!-- TV Episode Picker (if series) -->
