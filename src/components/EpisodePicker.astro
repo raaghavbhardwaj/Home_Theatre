@@ -1,0 +1,97 @@
+---
+import type { Episode, Season } from '../lib/types';
+
+interface Props {
+  mediaId: number | string;
+  imdbId?: string;
+  seasons: Season[];
+  currentSeason: number;
+  currentEpisode: number;
+  episodes: Episode[];
+}
+
+const {
+  mediaId,
+  imdbId = '',
+  seasons,
+  currentSeason,
+  currentEpisode,
+  episodes,
+} = Astro.props;
+
+const buildEpisodeUrl = (s: number, e: number) => {
+  const params = new URLSearchParams({
+    id: String(mediaId),
+    type: 'tv',
+    season: String(s),
+    episode: String(e),
+  });
+  if (imdbId) params.set('imdb', imdbId);
+  return `/watch?${params.toString()}`;
+};
+---
+
+<div class="flex flex-col gap-4 bg-[#121212] border border-[#222222] rounded-lg p-4">
+  <!-- Season Selector Header -->
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#222222] pb-3">
+    <div class="flex items-center gap-2">
+      <span class="font-mono text-xs uppercase font-bold text-neutral-400">SEASONS:</span>
+      <div class="flex flex-wrap gap-1.5">
+        {seasons.map((s) => {
+          const isActive = s.season_number === currentSeason;
+          const seasonUrl = buildEpisodeUrl(s.season_number, 1);
+          return (
+            <a
+              href={seasonUrl}
+              class={`px-2.5 py-1 rounded text-xs font-mono transition-colors ${
+                isActive
+                  ? 'bg-neutral-100 text-black font-bold'
+                  : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+              }`}
+            >
+              {s.name || `Season ${s.season_number}`}
+            </a>
+          );
+        })}
+      </div>
+    </div>
+
+    <span class="font-mono text-xs text-neutral-500">
+      {episodes.length} Episodes
+    </span>
+  </div>
+
+  <!-- Numeric Episode Matrix -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-72 overflow-y-auto pr-1">
+    {episodes.map((ep) => {
+      const isActive = ep.episode_number === currentEpisode;
+      const epUrl = buildEpisodeUrl(currentSeason, ep.episode_number);
+      const epPad = String(ep.episode_number).padStart(2, '0');
+
+      return (
+        <a
+          href={epUrl}
+          class={`flex flex-col p-2.5 rounded border transition-all text-left group ${
+            isActive
+              ? 'bg-white border-white text-black font-semibold shadow-md'
+              : 'bg-[#181818] border-[#262626] text-neutral-300 hover:border-neutral-500 hover:bg-[#202020]'
+          }`}
+        >
+          <div class="flex items-center justify-between font-mono text-xs">
+            <span class={`font-bold ${isActive ? 'text-black' : 'text-neutral-200 group-hover:text-white'}`}>
+              E{epPad}
+            </span>
+            {ep.air_date && (
+              <span class={`text-[10px] ${isActive ? 'text-neutral-700' : 'text-neutral-500'}`}>
+                {ep.air_date.substring(0, 4)}
+              </span>
+            )}
+          </div>
+          <span class={`text-xs mt-1 truncate ${isActive ? 'text-neutral-900' : 'text-neutral-400 group-hover:text-neutral-200'}`} title={ep.name}>
+            {ep.name}
+          </span>
+        </a>
+      );
+    })}
+  </div>
+</div>

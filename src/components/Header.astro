@@ -1,0 +1,207 @@
+---
+// Zero-React Minimalist Header with Native Dialog Search
+---
+
+<header class="sticky top-0 z-40 bg-[#0e0e0e]/95 backdrop-blur border-b border-[#222222]">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+    <!-- Brand -->
+    <div class="flex items-center gap-6">
+      <a href="/" class="flex items-center gap-2 group">
+        <span class="font-mono text-sm tracking-wider font-bold text-white bg-neutral-900 border border-neutral-700 px-2 py-1 rounded transition-colors group-hover:border-neutral-500">
+          HT
+        </span>
+        <span class="font-mono text-sm font-semibold tracking-tight text-neutral-200 group-hover:text-white transition-colors">
+          HOME_THEATRE
+        </span>
+      </a>
+
+      <!-- Quick Nav -->
+      <nav class="hidden sm:flex items-center gap-1 font-mono text-xs">
+        <a href="/" class="px-3 py-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors">
+          TRENDING
+        </a>
+        <a href="/?type=movie" class="px-3 py-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors">
+          MOVIES
+        </a>
+        <a href="/?type=tv" class="px-3 py-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors">
+          SERIES
+        </a>
+      </nav>
+    </div>
+
+    <!-- Search Trigger Button -->
+    <div class="flex items-center gap-3">
+      <button
+        id="search-open-btn"
+        type="button"
+        class="flex items-center gap-3 px-3 py-1.5 rounded-md bg-[#161616] border border-[#2a2a2a] hover:border-neutral-500 text-neutral-400 hover:text-white transition-all text-xs font-mono group cursor-pointer"
+        aria-label="Open search dialog"
+      >
+        <svg class="w-3.5 h-3.5 text-neutral-500 group-hover:text-neutral-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <span class="hidden md:inline">Search titles or IMDb ID...</span>
+        <span class="md:hidden">Search</span>
+        <kbd class="hidden sm:inline px-1.5 py-0.5 text-[10px] bg-[#222222] border border-[#333333] rounded text-neutral-400 font-mono">
+          /
+        </kbd>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- Native HTML5 Search Dialog -->
+<dialog
+  id="search-dialog"
+  class="backdrop:bg-black/80 backdrop:backdrop-blur-sm bg-[#121212] text-white border border-[#282828] rounded-xl p-0 w-full max-w-2xl shadow-2xl overflow-hidden m-auto"
+>
+  <div class="p-4 border-b border-[#222222] flex items-center gap-3">
+    <svg class="w-4 h-4 text-neutral-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+    <input
+      id="search-input"
+      type="text"
+      placeholder="Search movie, show, or paste IMDb ID (e.g. tt0137523)..."
+      class="w-full bg-transparent text-sm text-white placeholder-neutral-500 focus:outline-none font-sans"
+      autocomplete="off"
+    />
+    <kbd id="search-close-btn" class="px-2 py-1 text-[11px] bg-[#202020] border border-[#333333] rounded text-neutral-400 font-mono cursor-pointer hover:bg-neutral-800">
+      ESC
+    </kbd>
+  </div>
+
+  <div id="search-status" class="px-4 py-2 text-xs font-mono text-neutral-500 border-b border-[#1c1c1c] hidden">
+    Searching...
+  </div>
+
+  <div id="search-results" class="max-h-[60vh] overflow-y-auto divide-y divide-[#1c1c1c] p-2 space-y-1">
+    <div class="py-8 text-center text-xs font-mono text-neutral-600">
+      Type a title name or an IMDb ID (tt...) to search
+    </div>
+  </div>
+</dialog>
+
+<script>
+  // Vanilla JS Search Island - 0 React
+  const dialog = document.getElementById('search-dialog') as HTMLDialogElement | null;
+  const openBtn = document.getElementById('search-open-btn');
+  const closeBtn = document.getElementById('search-close-btn');
+  const input = document.getElementById('search-input') as HTMLInputElement | null;
+  const resultsContainer = document.getElementById('search-results');
+  const statusEl = document.getElementById('search-status');
+
+  let debounceTimer: number | undefined;
+
+  function openDialog() {
+    if (dialog && !dialog.open) {
+      dialog.showModal();
+      input?.focus();
+    }
+  }
+
+  function closeDialog() {
+    if (dialog && dialog.open) {
+      dialog.close();
+      if (input) input.value = '';
+    }
+  }
+
+  openBtn?.addEventListener('click', openDialog);
+  closeBtn?.addEventListener('click', closeDialog);
+
+  // Global hotkey '/' to open search, Escape to close
+  window.addEventListener('keydown', (e) => {
+    if (e.key === '/' && !dialog?.open && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      openDialog();
+    }
+  });
+
+  // Close dialog on backdrop click
+  dialog?.addEventListener('click', (e) => {
+    const rect = dialog.getBoundingClientRect();
+    const isInDialog = (
+      rect.top <= e.clientY &&
+      e.clientY <= rect.top + rect.height &&
+      rect.left <= e.clientX &&
+      e.clientX <= rect.left + rect.width
+    );
+    if (!isInDialog) {
+      closeDialog();
+    }
+  });
+
+  // Perform search
+  input?.addEventListener('input', () => {
+    const query = input.value.trim();
+    clearTimeout(debounceTimer);
+
+    if (!query) {
+      if (resultsContainer) {
+        resultsContainer.innerHTML = '<div class="py-8 text-center text-xs font-mono text-neutral-600">Type a title name or an IMDb ID (tt...) to search</div>';
+      }
+      if (statusEl) statusEl.classList.add('hidden');
+      return;
+    }
+
+    if (statusEl) {
+      statusEl.textContent = 'Searching...';
+      statusEl.classList.remove('hidden');
+    }
+
+    debounceTimer = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        const results = data.results || [];
+
+        if (statusEl) statusEl.classList.add('hidden');
+
+        if (!results.length) {
+          if (resultsContainer) {
+            resultsContainer.innerHTML = `<div class="py-8 text-center text-xs font-mono text-neutral-500">No results found for "${query}"</div>`;
+          }
+          return;
+        }
+
+        if (resultsContainer) {
+          resultsContainer.innerHTML = results.map((item: any) => {
+            const year = item.release_date ? item.release_date.substring(0, 4) : '';
+            const poster = item.poster_path 
+              ? `https://image.tmdb.org/t/p/w92${item.poster_path}`
+              : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="60" viewBox="0 0 40 60"%3E%3Crect width="40" height="60" fill="%23222"/%3E%3C/svg%3E';
+            const watchUrl = item.imdb_id 
+              ? `/watch?imdb=${item.imdb_id}`
+              : `/watch?id=${item.id}&type=${item.media_type}`;
+            
+            return `
+              <a href="${watchUrl}" class="flex items-center gap-3 p-2 rounded-lg hover:bg-neutral-800 transition-colors group">
+                <img src="${poster}" alt="" class="w-10 h-14 object-cover rounded bg-neutral-900 shrink-0" loading="lazy" />
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-white group-hover:text-neutral-200 truncate">${item.title}</span>
+                    <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400">${item.media_type}</span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-1 text-[11px] font-mono text-neutral-500">
+                    ${year ? `<span>${year}</span>` : ''}
+                    ${item.vote_average ? `<span>★ ${item.vote_average}</span>` : ''}
+                    ${item.imdb_id ? `<span class="text-amber-400/80">${item.imdb_id}</span>` : ''}
+                  </div>
+                </div>
+                <svg class="w-4 h-4 text-neutral-600 group-hover:text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </a>
+            `;
+          }).join('');
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.textContent = 'Search failed. Please try again.';
+          statusEl.classList.remove('hidden');
+        }
+      }
+    }, 250);
+  });
+</script>

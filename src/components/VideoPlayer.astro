@@ -1,0 +1,430 @@
+---
+import type { Stream } from '../lib/types';
+
+interface Props {
+  id: number | string;
+  imdbId?: string;
+  mediaType: 'movie' | 'tv';
+  season?: number;
+  episode?: number;
+  title: string;
+  streams?: Stream[];
+}
+
+const {
+  id,
+  imdbId = '',
+  mediaType,
+  season = 1,
+  episode = 1,
+  title,
+  streams = [],
+} = Astro.props;
+
+// Pass initial streams as JSON data attribute
+const streamsJson = JSON.stringify(streams);
+---
+
+<div class="flex flex-col gap-3 w-full" id="player-container"
+  data-id={id}
+  data-imdb={imdbId}
+  data-type={mediaType}
+  data-season={season}
+  data-episode={episode}
+  data-streams={streamsJson}
+>
+  <!-- Server & Quality Bar -->
+  <div class="flex flex-wrap items-center justify-between gap-2 px-1 py-1 font-mono text-xs">
+    <div class="flex items-center gap-2">
+      <span class="text-neutral-500 font-semibold uppercase text-[11px] flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        SERVERS:
+      </span>
+      <div id="server-list" class="flex flex-wrap items-center gap-1.5">
+        <!-- Dynamically rendered or SSR server buttons -->
+        {streams.length > 0 ? (
+          streams.map((s, idx) => (
+            <button
+              type="button"
+              class={`server-btn px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
+                idx === 0 
+                  ? 'bg-neutral-200 text-black font-semibold' 
+                  : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+              }`}
+              data-index={idx}
+              data-url={s.url}
+              data-quality={s.quality}
+            >
+              {s.name} ({s.quality})
+            </button>
+          ))
+        ) : (
+          <span class="text-neutral-500 text-xs italic">Loading available streams...</span>
+        )}
+      </div>
+    </div>
+
+    <!-- Mode switch: Player vs Direct Embed Fallback -->
+    <div class="flex items-center gap-2">
+      <button
+        id="toggle-embed-btn"
+        type="button"
+        class="text-[11px] px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+        title="Switch to backup player frame if stream fails"
+      >
+        Backup Embed
+      </button>
+      <span class="text-neutral-600 text-[11px] hidden sm:inline">[F: Fullscreen | Space: Pause]</span>
+    </div>
+  </div>
+
+  <!-- Player Screen Container -->
+  <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-[#222222] shadow-2xl flex items-center justify-center">
+    <!-- Native Video Element -->
+    <video
+      id="video-player"
+      class="w-full h-full object-contain"
+      controls
+      playsinline
+      crossorigin="anonymous"
+    >
+      <p class="text-neutral-500 p-4 text-xs">Your browser does not support HTML5 video.</p>
+    </video>
+
+    <!-- Fallback Embed Frame (Hidden by default) -->
+    <iframe
+      id="embed-frame"
+      class="w-full h-full border-0 hidden"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+      allowfullscreen
+    ></iframe>
+
+    <!-- Loading Spinner & Status Overlay -->
+    <div id="player-overlay" class="absolute inset-0 bg-black/80 backdrop-blur-xs flex flex-col items-center justify-center gap-3 pointer-events-none transition-opacity duration-300 opacity-0 hidden">
+      <div class="w-8 h-8 border-2 border-neutral-600 border-t-white rounded-full animate-spin"></div>
+      <span id="player-status-text" class="font-mono text-xs text-neutral-300">Connecting stream...</span>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="player-error" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center gap-3 p-6 text-center hidden">
+      <span class="text-red-500 font-mono text-xs font-semibold">[STREAM PLAYBACK ERROR]</span>
+      <p class="text-neutral-400 text-xs max-w-md font-sans">
+        Unable to play from the selected source. The link may have expired or is blocked.
+      </p>
+      <div class="flex items-center gap-3 mt-2">
+        <button id="next-server-btn" type="button" class="px-3 py-1.5 bg-white text-black font-mono text-xs font-semibold rounded hover:bg-neutral-200 transition-colors cursor-pointer">
+          Try Next Server
+        </button>
+        <button id="use-embed-btn" type="button" class="px-3 py-1.5 bg-neutral-800 text-white font-mono text-xs rounded hover:bg-neutral-700 transition-colors cursor-pointer">
+          Switch to Backup Embed
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import Hls from 'hls.js';
+
+  interface StreamItem {
+    name: string;
+    title: string;
+    url: string;
+    quality: string;
+    format?: string;
+  }
+
+  const container = document.getElementById('player-container');
+  const video = document.getElementById('video-player') as HTMLVideoElement | null;
+  const embedFrame = document.getElementById('embed-frame') as HTMLIFrameElement | null;
+  const serverList = document.getElementById('server-list');
+  const toggleEmbedBtn = document.getElementById('toggle-embed-btn');
+  const overlay = document.getElementById('player-overlay');
+  const statusText = document.getElementById('player-status-text');
+  const errorBox = document.getElementById('player-error');
+  const nextServerBtn = document.getElementById('next-server-btn');
+  const useEmbedBtn = document.getElementById('use-embed-btn');
+
+  if (container && video) {
+    const id = container.dataset.id || '';
+    const imdb = container.dataset.imdb || '';
+    const mediaType = container.dataset.type || 'movie';
+    const season = container.dataset.season || '1';
+    const episode = container.dataset.episode || '1';
+    
+    let streams: StreamItem[] = [];
+    try {
+      streams = JSON.parse(container.dataset.streams || '[]');
+    } catch {
+      streams = [];
+    }
+
+    let hls: Hls | null = null;
+    let currentStreamIndex = 0;
+    let isEmbedMode = false;
+
+    function showStatus(text: string) {
+      if (overlay && statusText) {
+        statusText.textContent = text;
+        overlay.classList.remove('hidden');
+        overlay.classList.remove('opacity-0');
+      }
+    }
+
+    function hideStatus() {
+      if (overlay) {
+        overlay.classList.add('opacity-0');
+        setTimeout(() => overlay.classList.add('hidden'), 300);
+      }
+    }
+
+    function showError() {
+      hideStatus();
+      if (errorBox) errorBox.classList.remove('hidden');
+    }
+
+    function hideError() {
+      if (errorBox) errorBox.classList.add('hidden');
+    }
+
+    function playStream(index: number) {
+      hideError();
+      if (!streams || streams.length === 0 || index >= streams.length) {
+        switchToEmbed();
+        return;
+      }
+
+      currentStreamIndex = index;
+      const targetStream = streams[index];
+      updateServerButtons();
+
+      showStatus(`Loading ${targetStream.name} (${targetStream.quality})...`);
+
+      const url = targetStream.url;
+      const isM3u8 = url.includes('.m3u8') || targetStream.format === 'm3u8';
+
+      // Save current timestamp if switching
+      const currentTime = video?.currentTime || 0;
+
+      if (Hls.isSupported() && isM3u8) {
+        if (hls) {
+          hls.destroy();
+        }
+        hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 90,
+        });
+
+        hls.loadSource(url);
+        hls.attachMedia(video!);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          hideStatus();
+          if (currentTime > 0) video!.currentTime = currentTime;
+          video?.play().catch(() => {});
+        });
+
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                console.warn('[HLS] Fatal network error, trying to recover...', data);
+                hls?.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                console.warn('[HLS] Fatal media error, recovering...', data);
+                hls?.recoverMediaError();
+                break;
+              default:
+                console.error('[HLS] Unrecoverable error:', data);
+                hls?.destroy();
+                showError();
+                break;
+            }
+          }
+        });
+      } else if (video!.canPlayType('application/vnd.apple.mpegurl') || !isM3u8) {
+        // Native Safari HLS or direct MP4
+        video!.src = url;
+        video!.addEventListener('loadedmetadata', () => {
+          hideStatus();
+          if (currentTime > 0) video!.currentTime = currentTime;
+          video!.play().catch(() => {});
+        }, { once: true });
+        video!.addEventListener('error', () => {
+          showError();
+        }, { once: true });
+      } else {
+        switchToEmbed();
+      }
+    }
+
+    function updateServerButtons() {
+      if (!serverList) return;
+      const buttons = serverList.querySelectorAll<HTMLButtonElement>('.server-btn');
+      buttons.forEach((btn, idx) => {
+        if (idx === currentStreamIndex && !isEmbedMode) {
+          btn.className = 'server-btn px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-200 text-black font-semibold';
+        } else {
+          btn.className = 'server-btn px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800';
+        }
+      });
+    }
+
+    function renderServerList() {
+      if (!serverList) return;
+      if (streams.length === 0) {
+        serverList.innerHTML = '<span class="text-neutral-500 text-xs italic">No direct streams found. Using backup embed.</span>';
+        return;
+      }
+
+      serverList.innerHTML = streams.map((s, idx) => `
+        <button
+          type="button"
+          class="server-btn px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
+            idx === currentStreamIndex && !isEmbedMode
+              ? 'bg-neutral-200 text-black font-semibold'
+              : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+          }"
+          data-index="${idx}"
+        >
+          ${s.name} (${s.quality})
+        </button>
+      `).join('');
+
+      serverList.querySelectorAll<HTMLButtonElement>('.server-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.index || 0);
+          if (isEmbedMode) {
+            switchToPlayer();
+          }
+          playStream(idx);
+        });
+      });
+    }
+
+    function switchToEmbed() {
+      isEmbedMode = true;
+      hideError();
+      hideStatus();
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+      if (video) {
+        video.pause();
+        video.classList.add('hidden');
+      }
+      if (embedFrame) {
+        const embedUrl = mediaType === 'tv'
+          ? `https://player.videasy.net/tv/${id}/${season}/${episode}`
+          : `https://player.videasy.net/movie/${id}`;
+        embedFrame.src = embedUrl;
+        embedFrame.classList.remove('hidden');
+      }
+      if (toggleEmbedBtn) {
+        toggleEmbedBtn.textContent = 'Native Player';
+        toggleEmbedBtn.classList.add('bg-neutral-200', 'text-black');
+        toggleEmbedBtn.classList.remove('bg-neutral-900', 'text-neutral-400');
+      }
+      updateServerButtons();
+    }
+
+    function switchToPlayer() {
+      isEmbedMode = false;
+      if (embedFrame) {
+        embedFrame.src = 'about:blank';
+        embedFrame.classList.add('hidden');
+      }
+      if (video) {
+        video.classList.remove('hidden');
+      }
+      if (toggleEmbedBtn) {
+        toggleEmbedBtn.textContent = 'Backup Embed';
+        toggleEmbedBtn.classList.remove('bg-neutral-200', 'text-black');
+        toggleEmbedBtn.classList.add('bg-neutral-900', 'text-neutral-400');
+      }
+      playStream(currentStreamIndex);
+    }
+
+    toggleEmbedBtn?.addEventListener('click', () => {
+      if (isEmbedMode) {
+        switchToPlayer();
+      } else {
+        switchToEmbed();
+      }
+    });
+
+    nextServerBtn?.addEventListener('click', () => {
+      if (currentStreamIndex + 1 < streams.length) {
+        playStream(currentStreamIndex + 1);
+      } else {
+        switchToEmbed();
+      }
+    });
+
+    useEmbedBtn?.addEventListener('click', switchToEmbed);
+
+    // Keyboard Hotkeys
+    window.addEventListener('keydown', (e) => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if (e.key === ' ' && !isEmbedMode && video) {
+        e.preventDefault();
+        if (video.paused) video.play();
+        else video.pause();
+      } else if ((e.key === 'f' || e.key === 'F') && video) {
+        e.preventDefault();
+        if (!document.fullscreenElement) {
+          video.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      } else if ((e.key === 'm' || e.key === 'M') && video) {
+        e.preventDefault();
+        video.muted = !video.muted;
+      } else if (e.key === 'ArrowRight' && video && !isEmbedMode) {
+        e.preventDefault();
+        video.currentTime += 10;
+      } else if (e.key === 'ArrowLeft' && video && !isEmbedMode) {
+        e.preventDefault();
+        video.currentTime = Math.max(0, video.currentTime - 10);
+      }
+    });
+
+    // Initial Load: Fetch streams if empty, else play first stream
+    if (streams.length === 0) {
+      showStatus('Fetching streams...');
+      const params = new URLSearchParams({
+        id: String(id),
+        type: mediaType,
+      });
+      if (imdb) params.set('imdb', imdb);
+      if (mediaType === 'tv') {
+        params.set('season', String(season));
+        params.set('episode', String(episode));
+      }
+
+      fetch(`/api/streams?${params.toString()}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.streams && data.streams.length > 0) {
+            streams = data.streams;
+            renderServerList();
+            playStream(0);
+          } else {
+            switchToEmbed();
+          }
+        })
+        .catch(() => {
+          switchToEmbed();
+        });
+    } else {
+      renderServerList();
+      playStream(0);
+    }
+  }
+</script>

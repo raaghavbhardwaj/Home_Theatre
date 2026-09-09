@@ -1,0 +1,177 @@
+---
+import Layout from '../layouts/Layout.astro';
+import MediaCard from '../components/MediaCard.astro';
+import { getTrending, getByGenre, searchMedia, resolveByImdbId } from '../lib/tmdb';
+import { GENRES } from '../lib/constants';
+import type { MediaItem } from '../lib/types';
+
+// Read query parameters
+const typeParam = Astro.url.searchParams.get('type') as 'movie' | 'tv' | null;
+const genreParam = Astro.url.searchParams.get('genre');
+const queryParam = Astro.url.searchParams.get('q');
+
+let items: MediaItem[] = [];
+let sectionTitle = 'TRENDING THIS WEEK';
+
+if (queryParam) {
+  sectionTitle = `SEARCH: "${queryParam}"`;
+  items = await searchMedia(queryParam);
+} else if (genreParam) {
+  const matchedGenre = GENRES.find((g) => g.slug === genreParam || String(g.id) === genreParam);
+  if (matchedGenre) {
+    sectionTitle = `${matchedGenre.name.toUpperCase()} TITLES`;
+    items = await getByGenre(matchedGenre.id, typeParam || 'movie');
+  } else {
+    items = await getTrending('all');
+  }
+} else if (typeParam) {
+  sectionTitle = typeParam === 'movie' ? 'POPULAR MOVIES' : 'POPULAR SERIES';
+  items = await getTrending(typeParam);
+} else {
+  items = await getTrending('all');
+}
+
+// Select featured hero item (first item with backdrop)
+const heroItem = items.find((i) => i.backdrop_path) || items[0];
+const heroBackdrop = heroItem?.backdrop_path 
+  ? `https://image.tmdb.org/t/p/w1280${heroItem.backdrop_path}` 
+  : null;
+---
+
+<Layout title="HOME_THEATRE — Extreme Minimalist Personal Streaming">
+  <!-- Hero Section -->
+  {heroItem && !queryParam && !genreParam && (
+    <div class="relative w-full rounded-xl overflow-hidden border border-[#242424] mb-8 bg-neutral-950 aspect-[21/9] min-h-[280px] sm:min-h-[360px] flex items-end">
+      {heroBackdrop && (
+        <img
+          src={heroBackdrop}
+          alt={heroItem.title}
+          class="absolute inset-0 w-full h-full object-cover object-center opacity-40 brightness-75 select-none pointer-events-none"
+          loading="eager"
+          decoding="async"
+        />
+      )}
+      <div class="absolute inset-0 bg-gradient-to-t from-[#0e0e0e] via-[#0e0e0e]/60 to-transparent"></div>
+
+      <div class="relative z-10 p-6 sm:p-8 max-w-2xl flex flex-col gap-3">
+        <div class="flex items-center gap-2 font-mono text-xs text-neutral-400">
+          <span class="px-2 py-0.5 rounded bg-white/10 border border-white/20 text-white font-semibold uppercase">
+            FEATURED
+          </span>
+          <span class="uppercase">{heroItem.media_type === 'tv' ? 'SERIES' : 'MOVIE'}</span>
+          {heroItem.vote_average > 0 && (
+            <span class="text-amber-400 font-semibold">★ {heroItem.vote_average}</span>
+          )}
+        </div>
+
+        <h1 class="text-2xl sm:text-4xl font-bold tracking-tight text-white font-sans">
+          {heroItem.title}
+        </h1>
+
+        {heroItem.overview && (
+          <p class="text-neutral-300 text-xs sm:text-sm line-clamp-2 sm:line-clamp-3 leading-relaxed">
+            {heroItem.overview}
+          </p>
+        )}
+
+        <div class="flex items-center gap-3 pt-2">
+          <a
+            href={heroItem.imdb_id ? `/watch?imdb=${heroItem.imdb_id}` : `/watch?id=${heroItem.id}&type=${heroItem.media_type}`}
+            class="px-5 py-2 rounded-md bg-white text-black font-semibold text-xs font-mono hover:bg-neutral-200 transition-colors flex items-center gap-2"
+          >
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            WATCH NOW
+          </a>
+          {heroItem.imdb_id && (
+            <a
+              href={`https://www.imdb.com/title/${heroItem.imdb_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="px-3 py-2 rounded-md bg-neutral-900 border border-neutral-700 text-amber-400 text-xs font-mono hover:border-neutral-500 transition-colors"
+            >
+              IMDb {heroItem.imdb_id}
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  )}
+
+  <!-- Category & Genre Filter Chips -->
+  <div class="flex items-center gap-2 overflow-x-auto pb-4 mb-6 no-scrollbar font-mono text-xs border-b border-[#1f1f1f]">
+    <a
+      href="/"
+      class={`px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+        !typeParam && !genreParam
+          ? 'bg-white text-black font-semibold'
+          : 'bg-[#161616] border border-[#282828] text-neutral-400 hover:text-white hover:border-neutral-600'
+      }`}
+    >
+      All
+    </a>
+    <a
+      href="/?type=movie"
+      class={`px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+        typeParam === 'movie' && !genreParam
+          ? 'bg-white text-black font-semibold'
+          : 'bg-[#161616] border border-[#282828] text-neutral-400 hover:text-white hover:border-neutral-600'
+      }`}
+    >
+      Movies
+    </a>
+    <a
+      href="/?type=tv"
+      class={`px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+        typeParam === 'tv' && !genreParam
+          ? 'bg-white text-black font-semibold'
+          : 'bg-[#161616] border border-[#282828] text-neutral-400 hover:text-white hover:border-neutral-600'
+      }`}
+    >
+      Series
+    </a>
+
+    <span class="h-4 w-[1px] bg-neutral-800 mx-1 shrink-0"></span>
+
+    {GENRES.map((g) => {
+      const isSelected = genreParam === g.slug;
+      return (
+        <a
+          href={`/?genre=${g.slug}${typeParam ? `&type=${typeParam}` : ''}`}
+          class={`px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+            isSelected
+              ? 'bg-white text-black font-semibold'
+              : 'bg-[#161616] border border-[#282828] text-neutral-400 hover:text-white hover:border-neutral-600'
+          }`}
+        >
+          {g.name}
+        </a>
+      );
+    })}
+  </div>
+
+  <!-- Content Section Header -->
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="font-mono text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-2">
+      <span class="w-1.5 h-1.5 rounded-full bg-neutral-400"></span>
+      {sectionTitle}
+    </h2>
+    <span class="font-mono text-xs text-neutral-600">
+      {items.length} titles
+    </span>
+  </div>
+
+  <!-- High-Density Media Grid -->
+  {items.length > 0 ? (
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+      {items.map((item) => (
+        <MediaCard item={item} />
+      ))}
+    </div>
+  ) : (
+    <div class="py-16 text-center text-xs font-mono text-neutral-500 border border-dashed border-neutral-800 rounded-lg">
+      No titles found. Try searching another term or genre.
+    </div>
+  )}
+</Layout>

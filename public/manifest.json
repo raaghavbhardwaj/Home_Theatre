@@ -1,0 +1,26 @@
+{
+  "name": "Home_Theatre Repo",
+  "version": "1.0.0",
+  "scrapers": [
+    {
+      "id": "home_theatre",
+      "name": "Home_Theatre",
+      "description": "Ultra-fast personal edge streaming hub (4K UHD / 1080p / 720p) with multi-server failover & subtitles hosted directly on Cloudflare Workers.",
+      "version": "1.0.0",
+      "author": "raaghav",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "home_theatre.js",
+      "enabled": true,
+      "formats": [
+        "m3u8"
+      ],
+      "logo": "https://home-theatre.fancied.workers.dev/favicon.svg",
+      "contentLanguage": [
+        "en"
+      ]
+    }
+  ]
+}
