@@ -28,7 +28,6 @@ src/
 │   ├── tmdb.ts             # Layer 2: TMDB client & IMDb reverse lookup
 │   └── providers/          # Layer 2 & 3: Pluggable Scrapers & Aggregator
 │       ├── types.ts        # ScraperProvider contract
-│       ├── vidsrc.ts       # VidSrc scraper implementation
 │       └── index.ts        # Aggregator: concurrency, timeout, deduplication
 ├── pages/
 │   ├── index.astro         # Layer 5: High-density catalog & category filters

@@ -17,105 +17,34 @@ const {
   title,
 } = Astro.props;
 
-// Build initial server URLs
 const isTv = mediaType === 'tv';
-const vidlinkUrl = isTv
-  ? `https://vidlink.pro/tv/${id}/${season}/${episode}?primaryColor=ffffff&secondaryColor=181818&iconColor=ffffff`
-  : `https://vidlink.pro/movie/${id}?primaryColor=ffffff&secondaryColor=181818&iconColor=ffffff`;
-
-const videasyUrl = isTv
-  ? `https://player.videasy.to/tv/${id}/${season}/${episode}`
-  : `https://player.videasy.to/movie/${id}`;
-
-const vidsrcUrl = isTv
-  ? `https://vidsrcme.ru/embed/tv?tmdb=${id}&season=${season}&episode=${episode}`
-  : `https://vidsrcme.ru/embed/movie?tmdb=${id}`;
 ---
 
 <div class="flex flex-col gap-3 w-full" id="player-wrapper">
-  <!-- Server Switcher Header -->
+  <!-- Status Header -->
   <div class="flex flex-wrap items-center justify-between gap-2 px-1 py-1 font-mono text-xs">
-    <div class="flex flex-wrap items-center gap-2">
+    <div class="flex items-center gap-2">
       <span class="text-neutral-500 font-semibold uppercase text-[11px] flex items-center gap-1.5">
-        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        STREAM SERVERS:
+        <span class="w-2 h-2 rounded-full bg-neutral-600"></span>
+        STREAM STATUS:
       </span>
-      <div id="server-selector" class="flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          class="server-pill px-3 py-1 rounded text-xs transition-colors cursor-pointer bg-white text-black font-semibold"
-          data-url={vidlinkUrl}
-          data-name="Server 1 (VidLink)"
-        >
-          Server 1 (VidLink)
-        </button>
-        <button
-          type="button"
-          class="server-pill px-3 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800"
-          data-url={videasyUrl}
-          data-name="Server 2 (Videasy)"
-        >
-          Server 2 (Videasy)
-        </button>
-        <button
-          type="button"
-          class="server-pill px-3 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800"
-          data-url={vidsrcUrl}
-          data-name="Server 3 (VidSrc)"
-        >
-          Server 3 (VidSrc)
-        </button>
-      </div>
-    </div>
-
-    <!-- Active Server Indicator & Tips -->
-    <div class="flex items-center gap-2 text-neutral-500 text-[11px] font-mono">
-      <span id="active-server-name" class="text-neutral-300 font-medium">Server 1 (VidLink)</span>
-      <span class="text-neutral-700">|</span>
-      <span>Click any server if stream stalls</span>
+      <span class="text-neutral-400 text-xs">No active providers</span>
     </div>
   </div>
 
-  <!-- Theater Player Container -->
-  <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-[#222222] shadow-2xl">
-    <!-- Active Responsive Video Player Frame -->
-    <iframe
-      id="main-player-frame"
-      src={vidlinkUrl}
-      class="w-full h-full border-0 absolute inset-0"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-      referrerpolicy="no-referrer"
-      allowfullscreen
-    ></iframe>
+  <!-- Theater Player Container (Clean Placeholder) -->
+  <div class="relative w-full aspect-video bg-[#0a0a0a] rounded-xl overflow-hidden border border-[#222222] shadow-2xl flex flex-col items-center justify-center p-6 text-center">
+    <div class="w-14 h-14 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center mb-4 text-neutral-500">
+      <svg class="w-6 h-6 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+      </svg>
+    </div>
+    <h3 class="text-lg font-bold text-white mb-1">{title}</h3>
+    <p class="text-neutral-400 text-sm max-w-md mb-4 font-sans">
+      {isTv ? `Season ${season} Episode ${episode}` : 'Movie'} stream providers have been removed.
+    </p>
+    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-neutral-900 border border-neutral-800 font-mono text-xs text-neutral-400">
+      <span>Ready for new streaming integration</span>
+    </div>
   </div>
 </div>
-
-<script>
-  // Vanilla JS Instant Server Switcher
-  const buttons = document.querySelectorAll<HTMLButtonElement>('.server-pill');
-  const iframe = document.getElementById('main-player-frame') as HTMLIFrameElement | null;
-  const activeLabel = document.getElementById('active-server-name');
-
-  buttons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const targetUrl = btn.dataset.url;
-      const serverName = btn.dataset.name || 'Server';
-
-      if (iframe && targetUrl) {
-        iframe.src = targetUrl;
-      }
-
-      if (activeLabel) {
-        activeLabel.textContent = serverName;
-      }
-
-      buttons.forEach((b) => {
-        if (b === btn) {
-          b.className = 'server-pill px-3 py-1 rounded text-xs transition-colors cursor-pointer bg-white text-black font-semibold';
-        } else {
-          b.className = 'server-pill px-3 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800';
-        }
-      });
-    });
-  });
-</script>

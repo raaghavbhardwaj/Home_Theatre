@@ -6,15 +6,12 @@
 import { SCRAPER_TIMEOUT_MS } from '../constants';
 import type { Stream } from '../types';
 import type { ScraperProvider } from './types';
-import { vidsrcProvider } from './vidsrc';
 
 /**
  * Registry of all available stream providers.
- * To add a new provider in the future, just add it to this array.
+ * Currently empty as all providers have been removed.
  */
-export const PROVIDERS: ScraperProvider[] = [
-  vidsrcProvider,
-];
+export const PROVIDERS: ScraperProvider[] = [];
 
 const QUALITY_WEIGHTS: Record<string, number> = {
   '4K': 5,
