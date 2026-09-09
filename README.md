@@ -39,7 +39,8 @@ src/
 │   ├── watch.astro         # Layer 5: Theater player & episode matrix
 │   └── api/                # Layer 4: Edge API Routes with global CDN caching
 │       ├── streams.ts      # Public CORS stream resolver
-│       └── search.ts       # Autocomplete search endpoint
+│       ├── search.ts       # Autocomplete search endpoint
+│       └── subtitles.ts    # Universal SRT-to-WebVTT edge proxy with CDN caching
 └── components/             # Layer 5: Reusable minimalist UI components
     ├── Header.astro        # Brand navigation
     ├── SearchDialog.astro  # Native HTML5 search modal (rendered on subpages)

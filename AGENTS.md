@@ -46,8 +46,9 @@ Every source file in the project belongs strictly to one of the following 5 deco
    - Executes enabled providers concurrently with strict timeout guards (`SCRAPER_TIMEOUT_MS`).
    - Deduplicates playable stream URLs and sorts streams from highest quality (4K/1080p) to lowest.
    - Exports `registerProvider()` for local private plugin integration.
-4. **Layer 4: Edge API Routes (`src/pages/api/streams.ts`, `src/pages/api/search.ts`)**
-   - CORS-enabled HTTP JSON endpoints (`Access-Control-Allow-Origin: *`).
+4. **Layer 4: Edge API Routes (`src/pages/api/streams.ts`, `src/pages/api/search.ts`, `src/pages/api/subtitles.ts`)**
+   - CORS-enabled HTTP endpoints (`Access-Control-Allow-Origin: *`).
+   - `/api/subtitles`: Real-time SubRip (SRT) to WebVTT conversion with CDN edge caching for universal browser `<track>` support.
    - Broadcasts `Cache-Control`, `CDN-Cache-Control`, and `Cloudflare-CDN-Cache-Control` for worldwide edge caching.
    - Serves both web frontend islands and third-party media players (e.g. Nuvio).
 5. **Layer 5: Presentation & Client Pages (`src/pages/*`, `src/components/*`)**
