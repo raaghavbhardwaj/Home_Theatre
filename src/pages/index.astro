@@ -35,7 +35,7 @@ if (queryParam.trim()) {
     <div class="w-full bg-[#141414] border border-[#262626] focus-within:border-neutral-500 rounded-2xl shadow-2xl overflow-hidden transition-all duration-200">
       <!-- Search Input Field -->
       <div class="p-4 sm:p-5 flex items-center gap-3 border-b border-[#222222]">
-        <svg class="w-5 h-5 text-neutral-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 text-neutral-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
 
@@ -44,6 +44,11 @@ if (queryParam.trim()) {
           type="text"
           value={queryParam}
           placeholder="Search movie, show, or paste IMDb ID (e.g. tt0137523)..."
+          aria-label="Search movies, TV shows, or paste IMDb ID"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={initialResults.length > 0 ? "true" : "false"}
+          aria-controls="spotlight-results"
           class="w-full bg-transparent text-base sm:text-lg text-white placeholder-neutral-500 focus:outline-none font-sans"
           autocomplete="off"
           autofocus
@@ -52,24 +57,25 @@ if (queryParam.trim()) {
         <button
           id="spotlight-clear-btn"
           type="button"
-          class={`px-2 py-1 text-[11px] bg-[#202020] border border-[#333333] rounded text-neutral-400 font-mono hover:bg-neutral-800 transition-colors cursor-pointer ${queryParam ? '' : 'hidden'}`}
+          class={`px-2.5 py-1 text-[11px] bg-[#202020] border border-[#333333] rounded text-neutral-400 font-mono hover:bg-neutral-800 transition-colors cursor-pointer ${queryParam ? '' : 'hidden'}`}
           title="Clear query"
+          aria-label="Clear search query"
         >
           CLEAR
         </button>
 
-        <kbd class="hidden sm:inline-block px-2 py-1 text-[10px] bg-[#1e1e1e] border border-[#333333] rounded text-neutral-500 font-mono select-none">
+        <kbd class="hidden sm:inline-block px-2 py-1 text-[10px] bg-[#1e1e1e] border border-[#333333] rounded text-neutral-500 font-mono select-none" aria-hidden="true">
           /
         </kbd>
       </div>
 
       <!-- Status Indicator (Loading/Error) -->
-      <div id="spotlight-status" class="px-5 py-2 text-xs font-mono text-neutral-500 border-b border-[#1c1c1c] hidden bg-[#111111]">
+      <div id="spotlight-status" role="status" aria-live="polite" class="px-5 py-2 text-xs font-mono text-neutral-400 border-b border-[#1c1c1c] hidden bg-[#111111]">
         Searching...
       </div>
 
       <!-- Results Container -->
-      <div id="spotlight-results" class="max-h-[60vh] overflow-y-auto divide-y divide-[#1c1c1c] p-2 space-y-1">
+      <div id="spotlight-results" role="listbox" aria-label="Search results" class="max-h-[60vh] overflow-y-auto divide-y divide-[#1c1c1c] p-2 space-y-1">
         {initialResults.length > 0 ? (
           initialResults.map((item) => {
             const year = item.release_date ? item.release_date.substring(0, 4) : '';
@@ -83,11 +89,15 @@ if (queryParam.trim()) {
             return (
               <a
                 href={watchUrl}
+                role="option"
                 class="spotlight-item flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-neutral-800/80 transition-all group"
               >
                 <img
                   src={poster}
                   alt=""
+                  width="44"
+                  height="64"
+                  decoding="async"
                   class="w-11 h-16 object-cover rounded-md bg-neutral-900 shrink-0 border border-neutral-800"
                   loading="lazy"
                 />
@@ -100,7 +110,7 @@ if (queryParam.trim()) {
                       {item.media_type}
                     </span>
                   </div>
-                  <div class="flex items-center gap-3 text-xs font-mono text-neutral-500">
+                  <div class="flex items-center gap-3 text-xs font-mono text-neutral-400">
                     {year && <span>{year}</span>}
                     {item.vote_average > 0 && (
                       <span class="text-amber-400/90 font-medium">★ {item.vote_average}</span>
@@ -111,8 +121,8 @@ if (queryParam.trim()) {
                   </div>
                 </div>
                 <div class="shrink-0 flex items-center text-neutral-600 group-hover:text-white transition-colors">
-                  <span class="hidden sm:inline font-mono text-[11px] mr-1 text-neutral-500 group-hover:text-neutral-300">PLAY</span>
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span class="hidden sm:inline font-mono text-[11px] mr-1 text-neutral-400 group-hover:text-neutral-200">PLAY</span>
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
@@ -120,7 +130,7 @@ if (queryParam.trim()) {
             );
           })
         ) : queryParam ? (
-          <div class="py-12 text-center text-xs font-mono text-neutral-500">
+          <div class="py-12 text-center text-xs font-mono text-neutral-400" role="status">
             No titles found for "{queryParam}"
           </div>
         ) : (
@@ -195,11 +205,17 @@ if (queryParam.trim()) {
     items.forEach((item, idx) => {
       if (idx === selectedIndex) {
         item.classList.add('bg-neutral-800', 'ring-1', 'ring-neutral-500');
+        item.setAttribute('aria-selected', 'true');
         (item as HTMLElement).scrollIntoView({ block: 'nearest' });
+        if (item.id) input?.setAttribute('aria-activedescendant', item.id);
       } else {
         item.classList.remove('bg-neutral-800', 'ring-1', 'ring-neutral-500');
+        item.setAttribute('aria-selected', 'false');
       }
     });
+    if (selectedIndex === -1) {
+      input?.removeAttribute('aria-activedescendant');
+    }
   }
 
   // Keyboard navigation
@@ -245,19 +261,21 @@ if (queryParam.trim()) {
 
   function resetToDefaultState() {
     selectedIndex = -1;
+    input?.setAttribute('aria-expanded', 'false');
+    input?.removeAttribute('aria-activedescendant');
     if (resultsContainer) {
       resultsContainer.innerHTML = `
         <div class="py-8 px-4 flex flex-col items-center text-center">
-          <p class="text-xs font-mono text-neutral-500 mb-4">
+          <p class="text-xs font-mono text-neutral-400 mb-4">
             Type any title name or paste an IMDb ID to begin
           </p>
           <div class="flex flex-wrap items-center justify-center gap-2">
-            <span class="text-[11px] font-mono text-neutral-600">Try:</span>
-            <button type="button" data-sample="Interstellar" class="sample-btn px-2.5 py-1 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Interstellar</button>
-            <button type="button" data-sample="Fight Club" class="sample-btn px-2.5 py-1 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Fight Club</button>
-            <button type="button" data-sample="Breaking Bad" class="sample-btn px-2.5 py-1 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Breaking Bad</button>
-            <button type="button" data-sample="Severance" class="sample-btn px-2.5 py-1 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Severance</button>
-            <button type="button" data-sample="Dune" class="sample-btn px-2.5 py-1 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Dune</button>
+            <span class="text-[11px] font-mono text-neutral-400">Try:</span>
+            <button type="button" data-sample="Interstellar" aria-label="Search Interstellar" class="sample-btn min-h-[36px] px-3.5 py-1.5 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Interstellar</button>
+            <button type="button" data-sample="Fight Club" aria-label="Search Fight Club" class="sample-btn min-h-[36px] px-3.5 py-1.5 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Fight Club</button>
+            <button type="button" data-sample="Breaking Bad" aria-label="Search Breaking Bad" class="sample-btn min-h-[36px] px-3.5 py-1.5 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Breaking Bad</button>
+            <button type="button" data-sample="Severance" aria-label="Search Severance" class="sample-btn min-h-[36px] px-3.5 py-1.5 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Severance</button>
+            <button type="button" data-sample="Dune" aria-label="Search Dune" class="sample-btn min-h-[36px] px-3.5 py-1.5 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Dune</button>
           </div>
         </div>
       `;
@@ -341,7 +359,7 @@ if (queryParam.trim()) {
       }
 
       if (resultsContainer) {
-        resultsContainer.innerHTML = (results as SearchResultItem[]).map((item) => {
+        resultsContainer.innerHTML = (results as SearchResultItem[]).map((item, idx) => {
           const year = item.release_date ? escapeHtml(item.release_date.substring(0, 4)) : '';
           const poster = item.poster_path
             ? `https://image.tmdb.org/t/p/w92${escapeHtml(item.poster_path)}`
@@ -354,28 +372,43 @@ if (queryParam.trim()) {
           const safeImdb = item.imdb_id ? escapeHtml(item.imdb_id) : '';
 
           return `
-            <a href="${watchUrl}" class="spotlight-item flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-neutral-800/80 transition-all group">
-              <img src="${poster}" alt="" class="w-11 h-16 object-cover rounded-md bg-neutral-900 shrink-0 border border-neutral-800" loading="lazy" />
+            <a
+              id="spotlight-opt-${idx}"
+              href="${watchUrl}"
+              role="option"
+              aria-selected="false"
+              class="spotlight-item flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-neutral-800/80 transition-all group"
+            >
+              <img
+                src="${poster}"
+                alt=""
+                width="44"
+                height="64"
+                decoding="async"
+                class="w-11 h-16 object-cover rounded-md bg-neutral-900 shrink-0 border border-neutral-800"
+                loading="lazy"
+              />
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
                   <span class="text-sm font-semibold text-white group-hover:text-neutral-100 truncate">${safeTitle}</span>
                   <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-700 text-neutral-400">${safeType}</span>
                 </div>
-                <div class="flex items-center gap-3 text-xs font-mono text-neutral-500">
+                <div class="flex items-center gap-3 text-xs font-mono text-neutral-400">
                   ${year ? `<span>${year}</span>` : ''}
                   ${item.vote_average ? `<span class="text-amber-400/90 font-medium">★ ${escapeHtml(String(item.vote_average))}</span>` : ''}
                   ${safeImdb ? `<span class="text-neutral-400">${safeImdb}</span>` : ''}
                 </div>
               </div>
               <div class="shrink-0 flex items-center text-neutral-600 group-hover:text-white transition-colors">
-                <span class="hidden sm:inline font-mono text-[11px] mr-1 text-neutral-500 group-hover:text-neutral-300">PLAY</span>
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span class="hidden sm:inline font-mono text-[11px] mr-1 text-neutral-400 group-hover:text-neutral-200">PLAY</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                 </svg>
               </div>
             </a>
           `;
         }).join('');
+        input?.setAttribute('aria-expanded', 'true');
       }
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;

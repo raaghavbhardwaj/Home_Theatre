@@ -133,6 +133,9 @@ const year = details.release_date ? details.release_date.substring(0, 4) : '';
         <img
           src={`https://image.tmdb.org/t/p/w300${details.poster_path}`}
           alt={details.title}
+          width="160"
+          height="240"
+          decoding="async"
           class="w-32 sm:w-40 h-auto rounded-md object-cover border border-[#262626] shrink-0 self-start shadow-md"
           loading="lazy"
         />
@@ -205,6 +208,9 @@ const year = details.release_date ? details.release_date.substring(0, 4) : '';
                     <img
                       src={`https://image.tmdb.org/t/p/w45${c.profile_path}`}
                       alt={c.name}
+                      width="20"
+                      height="20"
+                      decoding="async"
                       class="w-5 h-5 rounded-full object-cover"
                       loading="lazy"
                     />

@@ -43,6 +43,7 @@ const buildEpisodeUrl = (s: number, e: number) => {
           return (
             <a
               href={seasonUrl}
+              aria-current={isActive ? 'true' : undefined}
               class={`px-2.5 py-1 rounded text-xs font-mono transition-colors ${
                 isActive
                   ? 'bg-neutral-100 text-black font-bold'
@@ -62,7 +63,7 @@ const buildEpisodeUrl = (s: number, e: number) => {
   </div>
 
   <!-- Numeric Episode Matrix -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-72 overflow-y-auto pr-1">
+  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-72 overflow-y-auto pr-1" role="region" aria-label="Episodes list">
     {episodes.map((ep) => {
       const isActive = ep.episode_number === currentEpisode;
       const epUrl = buildEpisodeUrl(currentSeason, ep.episode_number);
@@ -71,6 +72,8 @@ const buildEpisodeUrl = (s: number, e: number) => {
       return (
         <a
           href={epUrl}
+          aria-current={isActive ? 'true' : undefined}
+          aria-label={`Episode ${ep.episode_number}: ${ep.name}`}
           class={`flex flex-col p-2.5 rounded border transition-all text-left group ${
             isActive
               ? 'bg-white border-white text-black font-semibold shadow-md'
