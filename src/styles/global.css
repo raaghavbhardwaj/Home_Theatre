@@ -1,15 +1,13 @@
 @import "tailwindcss";
 
-:root {
-  --bg-main: #0e0e0e;
-  --bg-card: #151515;
-  --bg-card-hover: #1c1c1c;
-  --border-subtle: #242424;
-  --border-focus: #444444;
-  --accent-red: #e50914;
-  --text-primary: #ffffff;
-  --text-secondary: #999999;
-  --text-muted: #666666;
+@theme {
+  --color-bg-main: #0e0e0e;
+  --color-bg-card: #141414;
+  --color-bg-card-hover: #1c1c1c;
+  --color-border-subtle: #242424;
+  --color-border-focus: #444444;
+  --color-accent-red: #e50914;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 body {

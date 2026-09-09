@@ -227,6 +227,14 @@ if (queryParam.trim()) {
       }[m] || m));
     }
 
+    function prefetchUrl(url) {
+      if (!url || document.querySelector(`link[rel="prefetch"][href="${url}"]`)) return;
+      const link = document.createElement('link');
+      link.rel = 'prefetch';
+      link.href = url;
+      document.head.appendChild(link);
+    }
+
     function updateSelectedResult() {
       const items = resultsContainer ? resultsContainer.querySelectorAll('a.spotlight-item') : [];
       items.forEach((item, idx) => {
@@ -235,6 +243,7 @@ if (queryParam.trim()) {
           item.setAttribute('aria-selected', 'true');
           item.scrollIntoView({ block: 'nearest' });
           if (item.id && input) input.setAttribute('aria-activedescendant', item.id);
+          prefetchUrl(item.getAttribute('href'));
         } else {
           item.classList.remove('bg-neutral-800', 'ring-1', 'ring-neutral-500');
           item.setAttribute('aria-selected', 'false');
@@ -244,6 +253,13 @@ if (queryParam.trim()) {
         input.removeAttribute('aria-activedescendant');
       }
     }
+
+    // Predictive hover prefetching
+    resultsContainer?.addEventListener('mouseover', (e) => {
+      const target = e.target;
+      const anchor = target && typeof target.closest === 'function' ? target.closest('a.spotlight-item') : null;
+      if (anchor) prefetchUrl(anchor.getAttribute('href'));
+    });
 
     // Keyboard navigation
     window.addEventListener('keydown', (e) => {
