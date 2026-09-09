@@ -67,11 +67,14 @@ const year = details.release_date ? details.release_date.substring(0, 4) : '';
     <!-- Breadcrumb / Header bar -->
     <div class="flex flex-wrap items-center justify-between gap-3 text-xs font-mono border-b border-[#222222] pb-3">
       <div class="flex items-center gap-2 text-neutral-400">
-        <a href="/" class="hover:text-white transition-colors">HOME</a>
+        <a href="/" class="hover:text-white transition-colors flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+          SEARCH
+        </a>
         <span>/</span>
-        <a href={`/?type=${mediaType}`} class="hover:text-white transition-colors uppercase">{mediaType}</a>
+        <span class="text-neutral-500 uppercase">{mediaType}</span>
         <span>/</span>
-        <span class="text-white font-semibold">{details.title}</span>
+        <span class="text-white font-semibold truncate max-w-[200px] sm:max-w-md">{details.title}</span>
         {mediaType === 'tv' && (
           <span class="text-neutral-400">
             [S{seasonParam}E{episodeParam}{currentEpisodeTitle ? ` — ${currentEpisodeTitle}` : ''}]
