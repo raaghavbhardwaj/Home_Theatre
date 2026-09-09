@@ -4,14 +4,15 @@ This document defines the strict engineering guidelines, architectural patterns,
 
 ---
 
-## 1. Architectural Philosophy & Zero-React Mandate
+## 1. Architectural Philosophy: Zero Bloat, Zero React & 100% Legal Separation
 
 `Home_Theatre` is an ultra-minimalist, high-performance personal streaming web application and edge API.
 - **Hosting**: Cloudflare Workers with Static Assets.
 - **Engine**: Astro 5+ in Server (`output: 'server'`) mode.
-- **Styling**: Tailwind CSS v4 (native `@import "tailwindcss"` engine).
-- **Client Runtime**: **Zero React**. All client-side interactions utilize pure semantic HTML5 elements (`<video>`, `<dialog>`, `<details>`) and lightweight vanilla JavaScript islands with `hls.js`.
-- **Target Performance**: 100/100 Google Lighthouse / PageSpeed score across Performance, Accessibility, Best Practices, and SEO.
+- **Styling**: Tailwind CSS v4 (native `@import "tailwindcss"` engine with `@theme` design tokens and `build.inlineStylesheets: 'always'`).
+- **Client Runtime**: **Zero React**. All client-side interactions utilize pure semantic HTML5 elements (`<video>`, `<dialog>`, `<button>`) and lightweight inlined vanilla JavaScript controllers.
+- **Legal Architecture**: **100% Clean & Legal Core**. Zero scrapers, zero copyrighted links, and zero DMCA-sensitive logic in the main repository. All scraping logic is decoupled via the Hybrid Plugin Engine (Remote Worker API or private Git submodules).
+- **Target Performance**: 100/100 Google Lighthouse / PageSpeed score across Performance (CLS=0, LCP < 200ms, critical chain = 1), Accessibility (WCAG 2.1 AA, WAI-ARIA Combobox 1.2), Best Practices, and SEO.
 
 ---
 
@@ -21,13 +22,13 @@ Every source file in the project belongs strictly to one of the following 5 deco
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 5: Presentation & Islands (src/pages, src/components) │
+│ Layer 5: Presentation & Pages (src/pages, src/components)   │
 ├─────────────────────────────────────────────────────────────┤
 │ Layer 4: Edge API Routes (src/pages/api/*)                  │
 ├─────────────────────────────────────────────────────────────┤
 │ Layer 3: Domain Aggregators (src/lib/providers/index.ts)   │
 ├─────────────────────────────────────────────────────────────┤
-│ Layer 2: Providers & External Clients (src/lib/providers/*) │
+│ Layer 2: Providers & Metadata Clients (src/lib/providers/*) │
 ├─────────────────────────────────────────────────────────────┤
 │ Layer 1: Contracts & Constants (src/lib/types.ts, constants)│
 └─────────────────────────────────────────────────────────────┘
@@ -35,53 +36,40 @@ Every source file in the project belongs strictly to one of the following 5 deco
 
 1. **Layer 1: Contracts & Constants (`src/lib/types.ts`, `src/lib/constants.ts`)**
    - Pure TypeScript definitions and immutable constants. Zero runtime dependencies.
-   - All domain schemas (`Stream`, `Subtitle`, `MediaItem`, `MediaDetails`, `Episode`, `Season`) live here.
+   - 100% strict typing: zero `any`, zero `as any`.
+   - All domain schemas (`Stream`, `Subtitle`, `MediaItem`, `MediaDetails`, `Episode`, `Season`, `RawTmdb*`) live here.
 2. **Layer 2: Providers & Metadata Clients (`src/lib/providers/*`, `src/lib/tmdb.ts`)**
-   - Isolated scraper modules implementing the `ScraperProvider` contract.
-   - Metadata fetching and IMDb resolution using free TMDB endpoints.
+   - Pluggable scraper modules implementing the `ScraperProvider` contract.
+   - `RemoteScraperProvider`: Adapter calling an external private scraper Worker via `SCRAPER_API_URL`.
+   - Metadata fetching and IMDb resolution using free TMDB endpoints with Cloudflare Edge subrequest caching (`cf: { cacheTtl, cacheEverything }`).
 3. **Layer 3: Domain Aggregators (`src/lib/providers/index.ts`)**
-   - Executes enabled providers concurrently with strict timeout guards (4,000 ms).
+   - Executes enabled providers concurrently with strict timeout guards (`SCRAPER_TIMEOUT_MS`).
    - Deduplicates playable stream URLs and sorts streams from highest quality (4K/1080p) to lowest.
+   - Exports `registerProvider()` for local private plugin integration.
 4. **Layer 4: Edge API Routes (`src/pages/api/streams.ts`, `src/pages/api/search.ts`)**
    - CORS-enabled HTTP JSON endpoints (`Access-Control-Allow-Origin: *`).
+   - Broadcasts `Cache-Control`, `CDN-Cache-Control`, and `Cloudflare-CDN-Cache-Control` for worldwide edge caching.
    - Serves both web frontend islands and third-party media players (e.g. Nuvio).
-5. **Layer 5: Presentation & Client Islands (`src/pages/*`, `src/components/*`)**
+5. **Layer 5: Presentation & Client Pages (`src/pages/*`, `src/components/*`)**
    - Server-rendered Astro templates with progressive enhancement.
-   - Native `<dialog>` search modal and vanilla `<video>` / `hls.js` player island.
+   - Zero-bloat Spotlight search interface with predictive prefetching and keyboard navigation.
+   - Native `<dialog>` search modal isolated in `SearchDialog.astro` (rendered strictly when `!isHome`).
+   - Universal video player with `hls.js` fallback and 1-click VLC/MPV codec error boundary.
 
 ---
 
-## 3. The Pluggable Scraper Architecture
+## 3. The Hybrid Pluggable Scraper Architecture
 
-Adding a new streaming provider requires creating exactly **one file** and registering it in the array:
-
-1. Create `src/lib/providers/<provider-name>.ts`:
-   ```typescript
-   import type { ScraperProvider } from './types';
-   import type { Stream } from '../types';
-
-   export const myNewProvider: ScraperProvider = {
-     name: 'MyProvider',
-     priority: 3,
-     enabled: true,
-     async resolve(tmdbId, mediaType, season, episode, imdbId): Promise<Stream[]> {
-       // 1. Fetch from provider API or upstream server
-       // 2. Return Stream[]
-       return [];
-     }
-   };
-   ```
-2. Register the provider in `src/lib/providers/index.ts`:
-   ```typescript
-   import { myNewProvider } from './myNewProvider';
-
-   export const PROVIDERS: ScraperProvider[] = [
-     vidsrcProvider,
-     myNewProvider, // <- One-line addition
-   ];
-   ```
-
-The aggregator handles concurrent execution, timeout cancellation, error isolation, deduplication, and quality sorting automatically.
+To preserve 100% legality and compliance with GitHub Terms of Service:
+1. **Never commit actual scrapers or piracy endpoints into the main repository.**
+2. **Mode 1: Remote Worker Adapter (Recommended)**:
+   - Host the scraper in a completely separate, private Cloudflare Worker.
+   - Point `Home_Theatre` to it using the `SCRAPER_API_URL` or `PROVIDER_API_URL` environment variable.
+   - `RemoteScraperProvider` forwards queries and normalizes the stream results with Cloudflare edge caching.
+3. **Mode 2: Private Git Submodule (`src/lib/providers/plugins/`)**:
+   - Link a private repository as a submodule in `src/lib/providers/plugins/`.
+   - Everything inside `src/lib/providers/plugins/` (except `README.md` and `.gitkeep`) is ignored by `.gitignore`.
+   - Plugins implement `ScraperProvider` and call `registerProvider(new MyPlugin())`.
 
 ---
 
@@ -109,9 +97,9 @@ The application acts as a standalone streaming web portal and as a self-hosted p
 
 ## 6. Google TypeScript Style Guide & Clean Code Rules
 
-All code contributions must strictly adhere to the following 5 Clean Code Rules:
+All code contributions must strictly adhere to the following Clean Code Rules:
 1. **Rule 1 (SRP - Single Responsibility Principle)**: Every module, component, and function must do one thing well. Keep scraper parsing logic isolated from HTTP routing.
 2. **Rule 2 (Explicit Descriptive Naming)**: Use intention-revealing names (`resolveByImdbId`, `executeProviderWithTimeout`). Never use abbreviations like `res1`, `tmp`, or `chk`.
 3. **Rule 3 (Fail-Fast & Guard Clauses)**: Validate inputs at the boundary. Return early rather than nesting deep `if/else` blocks.
 4. **Rule 4 (Zero Hardcoding & DRY Constants)**: All external endpoints, API keys, timeouts, and genre tables must be centralized in `src/lib/constants.ts`.
-5. **Rule 5 (Immutability & Zero `any`)**: Use `readonly`, `as const`, and strict domain interfaces. The `any` type is strictly prohibited in business logic.
+5. **Rule 5 (100% Strict TypeScript & Zero `any`)**: Enforce `strict: true`, `strictNullChecks: true`, and `noImplicitAny: true`. The `any` type or `as any` casting is strictly prohibited across the entire codebase. Catch blocks must use `catch (err: unknown)` with `err instanceof Error` narrowing.

@@ -8,11 +8,14 @@
 ## ⚡ Highlights
 
 - **Zero React Runtime**: Pure semantic HTML5 + vanilla JavaScript islands with `hls.js`. Zero hydration delays, zero layout shifts, sub-0.4s FCP.
-- **Pluggable Scraper Architecture**: Adding a new streaming provider takes exactly **1 file** in `src/lib/providers/`.
+- **100% Legal & DMCA-Proof Core**: The core repository contains zero hardcoded piracy endpoints or scraping logic. Streaming backends connect via decoupled remote workers or git-ignored submodules.
+- **Hybrid Plugin Architecture**: Connect your stream scraper via a private remote Cloudflare Worker (`SCRAPER_API_URL`) or an isolated local plugin (`src/lib/providers/plugins/`).
+- **Zero-Bloat Spotlight Search**: Instant keyboard-driven navigation (<kbd>&uarr;</kbd>/<kbd>&darr;</kbd>, <kbd>Enter</kbd>, <kbd>Esc</kbd>) with predictive edge prefetching for 0ms watch page transitions.
 - **IMDb First-Class Citizen**: Search, browse, and play movies or TV series directly using IMDb IDs (`/watch?imdb=tt0137523`) with zero paid IMDb API subscriptions (powered by free TMDB reverse lookups).
+- **Edge Caching & CDN Optimization**: Tiered Cloudflare caching (`s-maxage=86400`, `stale-while-revalidate=604800`) across SSR routes and Edge APIs, with subrequest caching for TMDB metadata.
 - **Dual-Consumer Engine**: Serves both a lightning-fast web streaming interface and a self-hosted Nuvio streaming provider suite (`/manifest.json`, `/home_theatre.js`).
-- **Resilient Edge Stream Aggregation**: Queries multiple scraping backends concurrently with strict 4-second timeout cancellation, deduplication, quality sorting (4K → 1080p → 720p), and seamless in-player server switching with failover.
-- **Keyboard-First Navigation**: Global search hotkey (<kbd>/</kbd>), native HTML5 `<dialog>` autocomplete modal, player hotkeys (<kbd>Space</kbd>, <kbd>F</kbd>, <kbd>M</kbd>, arrow keys).
+- **Resilient Edge Stream Aggregation**: Queries scraping providers concurrently with strict timeout cancellation, deduplication, quality sorting (4K → 1080p → 720p), and seamless in-player server switching with failover.
+- **100% Strict TypeScript**: Strict type safety throughout the codebase with zero `any` and zero `as any`.
 
 ---
 
@@ -24,64 +27,85 @@ The project is structured into 5 decoupled architectural layers:
 src/
 ├── lib/
 │   ├── types.ts            # Layer 1: Pure domain schemas (Stream, MediaItem, Episode, Season)
-│   ├── constants.ts        # Layer 1: Centralized configuration and endpoints
-│   ├── tmdb.ts             # Layer 2: TMDB client & IMDb reverse lookup
+│   ├── constants.ts        # Layer 1: Centralized configuration, edge timeouts, and endpoints
+│   ├── tmdb.ts             # Layer 2: TMDB client with Edge subrequest caching & IMDb lookup
 │   └── providers/          # Layer 2 & 3: Pluggable Scrapers & Aggregator
 │       ├── types.ts        # ScraperProvider contract
-│       └── index.ts        # Aggregator: concurrency, timeout, deduplication
+│       ├── remote.ts       # Remote worker scraper adapter (SCRAPER_API_URL)
+│       ├── plugins/        # Git-ignored directory for private scraper plugins
+│       └── index.ts        # Aggregator: concurrency, timeout, deduplication, registerProvider()
 ├── pages/
-│   ├── index.astro         # Layer 5: High-density catalog & category filters
+│   ├── index.astro         # Layer 5: High-density Spotlight search & curated catalog
 │   ├── watch.astro         # Layer 5: Theater player & episode matrix
-│   └── api/                # Layer 4: Edge API Routes
+│   └── api/                # Layer 4: Edge API Routes with global CDN caching
 │       ├── streams.ts      # Public CORS stream resolver
 │       └── search.ts       # Autocomplete search endpoint
 └── components/             # Layer 5: Reusable minimalist UI components
-    ├── Header.astro        # Brand navigation & native search modal
+    ├── Header.astro        # Brand navigation
+    ├── SearchDialog.astro  # Native HTML5 search modal (rendered on subpages)
     ├── MediaCard.astro     # Zero-CLS 2:3 poster card with badges
-    ├── VideoPlayer.astro   # Native HTML5 video + hls.js server switcher
+    ├── VideoPlayer.astro   # Native HTML5 video + hls.js server switcher & VLC/MPV fallback
     └── EpisodePicker.astro # Season tabs + numeric episode matrix
 ```
 
 ---
 
-## 🔌 Adding a New Streaming Provider (1-File Drop-In)
+## 🔌 The Hybrid Plugin System
 
-To add a new scraper backend:
+To keep `Home_Theatre` 100% legal and safe to host publicly on GitHub and Cloudflare:
 
-1. Create a new file in `src/lib/providers/<name>.ts`:
+### Option 1: Remote Worker Adapter (Recommended)
+Deploy your scraping logic to a separate private Cloudflare Worker. Point `Home_Theatre` to it using environment variables:
 
-```typescript
-import type { ScraperProvider } from './types';
-import type { Stream } from '../types';
-
-export const myScraper: ScraperProvider = {
-  name: 'MyProvider',
-  priority: 3,
-  enabled: true,
-  async resolve(tmdbId, mediaType, season, episode, imdbId): Promise<Stream[]> {
-    // Implement resolution logic...
-    return [
-      {
-        name: 'MyProvider',
-        title: 'MyProvider — 1080p',
-        url: 'https://example.com/stream.m3u8',
-        quality: '1080p',
-        format: 'm3u8',
-      },
-    ];
-  },
-};
+```bash
+# In .env or Cloudflare Worker secrets / environment variables
+SCRAPER_API_URL="https://my-private-scraper.workers.dev"
 ```
 
-2. Export it in `src/lib/providers/index.ts`:
+The remote worker must implement a simple HTTP JSON endpoint:
+```
+GET /?tmdbId=550&type=movie
+GET /?tmdbId=1399&type=tv&season=1&episode=1
+```
+Returning:
+```json
+{
+  "streams": [
+    {
+      "name": "Server 1",
+      "title": "Server 1 — 1080p",
+      "url": "https://stream.example.com/master.m3u8",
+      "quality": "1080p",
+      "format": "m3u8"
+    }
+  ]
+}
+```
+
+### Option 2: Private Git Submodule / Local Plugin
+Clone your private scraper repository into `src/lib/providers/plugins/` (which is excluded from Git via `.gitignore`):
+
+```bash
+git submodule add https://github.com/your-username/private-scrapers.git src/lib/providers/plugins/private
+```
+
+Inside your plugin, implement the `ScraperProvider` contract and register it:
 
 ```typescript
-import { myScraper } from './myScraper';
+import { registerProvider } from '../index';
+import type { ScraperProvider } from '../types';
 
-export const PROVIDERS: ScraperProvider[] = [
-  vidsrcProvider,
-  myScraper, // Done!
-];
+export const customProvider: ScraperProvider = {
+  name: 'CustomProvider',
+  priority: 1,
+  enabled: true,
+  async resolve(tmdbId, mediaType, season, episode, imdbId) {
+    // Custom scraping logic
+    return [];
+  }
+};
+
+registerProvider(customProvider);
 ```
 
 ---
