@@ -9,7 +9,7 @@ export const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
 export const IMDB_BASE_URL = 'https://www.imdb.com/title';
 
-export const SCRAPER_TIMEOUT_MS = 4000;
+export const SCRAPER_TIMEOUT_MS = 30000;
 
 export const GENRES = [
   { id: 28, slug: 'action', name: 'Action' },

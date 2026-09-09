@@ -14,7 +14,8 @@ export interface Stream {
   title: string;
   url: string;
   quality: '4K' | '1080p' | '720p' | '480p' | 'Auto' | string;
-  format?: 'm3u8' | 'mp4';
+  format?: 'm3u8' | 'mp4' | 'mkv' | string;
+  size?: string;
   headers?: Record<string, string>;
   subtitles?: Subtitle[];
 }

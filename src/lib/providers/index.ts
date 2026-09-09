@@ -9,7 +9,7 @@ import type { ScraperProvider } from './types';
 
 /**
  * Registry of all available stream providers.
- * Currently empty as all providers have been removed.
+ * Currently empty - waiting for new website integration.
  */
 export const PROVIDERS: ScraperProvider[] = [];
 
