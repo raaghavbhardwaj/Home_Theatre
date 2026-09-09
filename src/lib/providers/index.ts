@@ -7,11 +7,25 @@ import { SCRAPER_TIMEOUT_MS } from '../constants';
 import type { Stream } from '../types';
 import type { ScraperProvider } from './types';
 
+import { RemoteScraperProvider } from './remote';
+
 /**
  * Registry of all available stream providers.
- * Currently empty - waiting for new website integration.
+ * Initialized with the RemoteScraperProvider (which auto-activates if SCRAPER_API_URL or PROVIDER_API_URL is configured).
+ * Additional providers (e.g. from local git submodules) can register via registerProvider().
  */
-export const PROVIDERS: ScraperProvider[] = [];
+export const PROVIDERS: ScraperProvider[] = [
+  new RemoteScraperProvider(),
+];
+
+/**
+ * Dynamically registers an additional scraper provider (e.g. from a submodule plugin).
+ */
+export function registerProvider(provider: ScraperProvider): void {
+  if (!PROVIDERS.some((p) => p.id === provider.id)) {
+    PROVIDERS.push(provider);
+  }
+}
 
 const QUALITY_WEIGHTS: Record<string, number> = {
   '4K': 5,

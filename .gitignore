@@ -18,3 +18,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Private Scraper Plugins & Submodules
+src/lib/providers/plugins/*
+!src/lib/providers/plugins/README.md
+!src/lib/providers/plugins/.gitkeep
