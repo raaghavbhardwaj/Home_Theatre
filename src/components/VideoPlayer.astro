@@ -59,6 +59,20 @@ try {
     </div>
 
     <div class="flex items-center gap-3 text-neutral-400 text-[11px]">
+      <!-- Audio Track Switcher (Hidden when single audio, visible when multi-audio) -->
+      <div id="audio-track-container" class="hidden items-center gap-1.5 bg-neutral-900 border border-neutral-800 rounded px-2 py-0.5 text-[11px]">
+        <span class="text-neutral-400 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          Audio:
+        </span>
+        <select id="audio-track-select" class="bg-neutral-900 text-white font-sans focus:outline-none cursor-pointer pr-1">
+          <!-- Injected dynamically -->
+        </select>
+      </div>
+
       <span id="active-stream-badge" class="font-medium text-white">Stream</span>
       <span class="text-neutral-700">|</span>
       <a
@@ -197,6 +211,7 @@ try {
   interface WindowWithResolver extends Window {
     Hls?: HlsConstructor;
     CinejoyResolver?: {
+      hasHdhub?: boolean;
       resolve(query: {
         tmdbId: string;
         imdbId?: string;
@@ -211,7 +226,7 @@ try {
 
   function loadResolverScript(scraperUrl: string): Promise<void> {
     const win = window as unknown as WindowWithResolver;
-    if (win.CinejoyResolver) return Promise.resolve();
+    if (win.CinejoyResolver && win.CinejoyResolver.hasHdhub) return Promise.resolve();
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = `${scraperUrl.replace(/\/+$/, '')}/resolver.js?t=${Date.now()}`;
@@ -238,7 +253,48 @@ try {
     if (errorOverlay) errorOverlay.classList.add('hidden');
   }
 
+  function renderAudioTracks(tracks: any[], activeIndex: number) {
+    const container = document.getElementById('audio-track-container');
+    const select = document.getElementById('audio-track-select') as HTMLSelectElement | null;
+    if (!container || !select) return;
+
+    if (!tracks || tracks.length <= 1) {
+      container.classList.add('hidden');
+      container.classList.remove('flex');
+      return;
+    }
+
+    container.classList.remove('hidden');
+    container.classList.add('flex');
+    select.innerHTML = '';
+
+    tracks.forEach((track, idx) => {
+      const opt = document.createElement('option');
+      opt.value = String(idx);
+      const rawLabel = String(track.name || track.lang || `Track ${idx + 1}`);
+      let label = rawLabel;
+      if (track.lang === 'hi' || /hin/i.test(rawLabel) || rawLabel.includes('हिन्दी')) {
+        label = `Hindi (${rawLabel})`;
+      } else if (track.lang === 'en' || /eng/i.test(rawLabel)) {
+        label = `English (${rawLabel})`;
+      }
+      opt.textContent = label;
+      if (idx === activeIndex) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
+    });
+
+    select.onchange = () => {
+      const selectedIdx = parseInt(select.value, 10);
+      if (hlsInstance) {
+        hlsInstance.audioTrack = selectedIdx;
+      }
+    };
+  }
+
   function cleanupHls() {
+    renderAudioTracks([], -1);
     if (hlsInstance) {
       try {
         hlsInstance.destroy();
@@ -331,6 +387,15 @@ try {
           hlsInstance = new Hls({ enableWorker: true });
           hlsInstance.loadSource(stream.url);
           hlsInstance.attachMedia(video);
+
+          const updateTracks = () => {
+            if (hlsInstance && hlsInstance.audioTracks) {
+              renderAudioTracks(hlsInstance.audioTracks, hlsInstance.audioTrack);
+            }
+          };
+          hlsInstance.on(Hls.Events.AUDIO_TRACKS_UPDATED, updateTracks);
+          hlsInstance.on(Hls.Events.MANIFEST_PARSED, updateTracks);
+
           hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
             console.error('[HLS Error]', data);
             if (data.fatal) {
