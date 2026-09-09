@@ -8,6 +8,12 @@ let initialResults: MediaItem[] = [];
 
 if (queryParam.trim()) {
   initialResults = await searchMedia(queryParam.trim());
+  Astro.response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=3600, stale-while-revalidate=86400');
+  Astro.response.headers.set('CDN-Cache-Control', 'max-age=3600, stale-while-revalidate=86400');
+} else {
+  Astro.response.headers.set('Cache-Control', 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800');
+  Astro.response.headers.set('CDN-Cache-Control', 'max-age=86400, stale-while-revalidate=604800');
+  Astro.response.headers.set('Cloudflare-CDN-Cache-Control', 'max-age=86400');
 }
 ---
 

@@ -60,6 +60,11 @@ const pageTitle = mediaType === 'tv'
   : `Watch ${details.title} — HOME_THEATRE`;
 
 const year = details.release_date ? details.release_date.substring(0, 4) : '';
+
+// Cloudflare Edge caching: cache movie/show SSR page for 24h at the edge
+Astro.response.headers.set('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800');
+Astro.response.headers.set('CDN-Cache-Control', 'max-age=86400, stale-while-revalidate=604800');
+Astro.response.headers.set('Cloudflare-CDN-Cache-Control', 'max-age=86400');
 ---
 
 <Layout title={pageTitle} description={details.overview} preconnectImages={true}>

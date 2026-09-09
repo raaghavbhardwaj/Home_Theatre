@@ -47,6 +47,29 @@ function toMediaItem(raw: RawTmdbItem, fallbackType: 'movie' | 'tv' = 'movie'): 
   };
 }
 
+interface CloudflareRequestInit extends RequestInit {
+  cf?: {
+    cacheTtl?: number;
+    cacheEverything?: boolean;
+  };
+}
+
+/**
+ * Edge-optimized fetch wrapper with Cloudflare CDN subrequest caching.
+ */
+async function tmdbFetch(url: string, cacheTtlSeconds: number = 86400): Promise<Response> {
+  const init: CloudflareRequestInit = {
+    headers: {
+      Accept: 'application/json',
+    },
+    cf: {
+      cacheTtl: cacheTtlSeconds,
+      cacheEverything: true,
+    },
+  };
+  return fetch(url, init);
+}
+
 /**
  * Resolves a media item directly by its IMDb ID (e.g. tt0137523).
  */
@@ -55,8 +78,9 @@ export async function resolveByImdbId(imdbId: string): Promise<MediaItem | null>
   if (!/^tt\d+$/.test(cleanId)) return null;
 
   try {
-    const res = await fetch(
-      `${TMDB_BASE_URL}/find/${cleanId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`
+    const res = await tmdbFetch(
+      `${TMDB_BASE_URL}/find/${cleanId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`,
+      86400
     );
     if (!res.ok) return null;
     const data = (await res.json()) as RawTmdbFindResponse;
@@ -78,7 +102,7 @@ export async function resolveByImdbId(imdbId: string): Promise<MediaItem | null>
  */
 export async function getTrending(type: 'all' | 'movie' | 'tv' = 'all'): Promise<MediaItem[]> {
   try {
-    const res = await fetch(`${TMDB_BASE_URL}/trending/${type}/week?api_key=${TMDB_API_KEY}`);
+    const res = await tmdbFetch(`${TMDB_BASE_URL}/trending/${type}/week?api_key=${TMDB_API_KEY}`, 43200);
     if (!res.ok) return [];
     const data = (await res.json()) as RawTmdbSearchResponse;
     return (data.results || []).map((item: RawTmdbItem) => toMediaItem(item));
@@ -92,8 +116,9 @@ export async function getTrending(type: 'all' | 'movie' | 'tv' = 'all'): Promise
  */
 export async function getByGenre(genreId: number, type: 'movie' | 'tv' = 'movie'): Promise<MediaItem[]> {
   try {
-    const res = await fetch(
-      `${TMDB_BASE_URL}/discover/${type}?api_key=${TMDB_API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&vote_count.gte=150`
+    const res = await tmdbFetch(
+      `${TMDB_BASE_URL}/discover/${type}?api_key=${TMDB_API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&vote_count.gte=150`,
+      86400
     );
     if (!res.ok) return [];
     const data = (await res.json()) as RawTmdbSearchResponse;
@@ -117,8 +142,9 @@ export async function searchMedia(query: string): Promise<MediaItem[]> {
   }
 
   try {
-    const res = await fetch(
-      `${TMDB_BASE_URL}/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(trimmed)}&include_adult=false`
+    const res = await tmdbFetch(
+      `${TMDB_BASE_URL}/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(trimmed)}&include_adult=false`,
+      3600
     );
     if (!res.ok) return [];
     const data = (await res.json()) as RawTmdbSearchResponse;
@@ -138,8 +164,9 @@ export async function getMediaDetails(
   type: 'movie' | 'tv'
 ): Promise<MediaDetails | null> {
   try {
-    const res = await fetch(
-      `${TMDB_BASE_URL}/${type}/${id}?api_key=${TMDB_API_KEY}&append_to_response=credits,videos,external_ids`
+    const res = await tmdbFetch(
+      `${TMDB_BASE_URL}/${type}/${id}?api_key=${TMDB_API_KEY}&append_to_response=credits,videos,external_ids`,
+      86400
     );
     if (!res.ok) return null;
     const raw = (await res.json()) as RawTmdbDetailsResponse;
@@ -183,7 +210,7 @@ export async function getMediaDetails(
  */
 export async function getSeasonEpisodes(id: string | number, season: number): Promise<Episode[]> {
   try {
-    const res = await fetch(`${TMDB_BASE_URL}/tv/${id}/season/${season}?api_key=${TMDB_API_KEY}`);
+    const res = await tmdbFetch(`${TMDB_BASE_URL}/tv/${id}/season/${season}?api_key=${TMDB_API_KEY}`, 86400);
     if (!res.ok) return [];
     const data = (await res.json()) as RawTmdbSeasonResponse;
     return (data.episodes || []).map((e: RawTmdbSeasonEpisode) => ({

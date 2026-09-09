@@ -5,7 +5,11 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   output: 'server',
-  adapter: cloudflare(),
+  adapter: cloudflare({
+    platformProxy: {
+      enabled: true,
+    },
+  }),
   build: {
     inlineStylesheets: 'always',
   },

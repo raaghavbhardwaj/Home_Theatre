@@ -11,7 +11,9 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': '*',
-  'Cache-Control': 'public, max-age=120, stale-while-revalidate=300',
+  'Cache-Control': 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800',
+  'CDN-Cache-Control': 'max-age=86400, stale-while-revalidate=604800',
+  'Cloudflare-CDN-Cache-Control': 'max-age=86400',
 };
 
 export const OPTIONS: APIRoute = async () => {
