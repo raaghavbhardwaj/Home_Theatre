@@ -5,15 +5,19 @@ import EpisodePicker from '../components/EpisodePicker.astro';
 import { getMediaDetails, getSeasonEpisodes, resolveByImdbId } from '../lib/tmdb';
 import type { Episode, MediaDetails } from '../lib/types';
 
-const imdbParam = Astro.url.searchParams.get('imdb');
+const imdbParam = Astro.url.searchParams.get('imdb') || undefined;
 const idParam = Astro.url.searchParams.get('id');
-const typeParam = (Astro.url.searchParams.get('type') || 'movie') as 'movie' | 'tv';
-const seasonParam = parseInt(Astro.url.searchParams.get('season') || '1', 10);
-const episodeParam = parseInt(Astro.url.searchParams.get('episode') || '1', 10);
+const rawType = (Astro.url.searchParams.get('type') || 'movie').toLowerCase();
+const initialType: 'movie' | 'tv' = rawType === 'tv' || rawType === 'series' ? 'tv' : 'movie';
+
+const rawSeason = parseInt(Astro.url.searchParams.get('season') || '1', 10);
+const rawEpisode = parseInt(Astro.url.searchParams.get('episode') || '1', 10);
+const seasonParam = isNaN(rawSeason) || rawSeason < 1 ? 1 : rawSeason;
+const episodeParam = isNaN(rawEpisode) || rawEpisode < 1 ? 1 : rawEpisode;
 
 let mediaId: number | string | null = idParam;
-let mediaType: 'movie' | 'tv' = typeParam;
-let imdbId: string | undefined = imdbParam || undefined;
+let mediaType: 'movie' | 'tv' = initialType;
+let imdbId: string | undefined = imdbParam;
 
 // If IMDb ID was provided without TMDB ID, resolve it
 if (imdbParam && !idParam) {

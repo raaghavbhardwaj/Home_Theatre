@@ -92,6 +92,18 @@
   const statusEl = document.getElementById('search-status');
 
   let debounceTimer: number | undefined;
+  let searchAbortController: AbortController | null = null;
+  let selectedIndex = -1;
+
+  function escapeHtml(str: string): string {
+    return str.replace(/[&<>"']/g, (m) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    }[m] || m));
+  }
 
   function openDialog() {
     if (dialog && !dialog.open) {
@@ -104,13 +116,14 @@
     if (dialog && dialog.open) {
       dialog.close();
       if (input) input.value = '';
+      selectedIndex = -1;
     }
   }
 
   openBtn?.addEventListener('click', openDialog);
   closeBtn?.addEventListener('click', closeDialog);
 
-  // Global hotkey '/' to open search, Escape to close
+  // Global hotkey '/' to open search
   window.addEventListener('keydown', (e) => {
     if (e.key === '/' && !dialog?.open && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
       e.preventDefault();
@@ -132,10 +145,49 @@
     }
   });
 
-  // Perform search
+  function updateSelectedResult() {
+    const items = resultsContainer?.querySelectorAll('a.search-item') || [];
+    items.forEach((item, idx) => {
+      if (idx === selectedIndex) {
+        item.classList.add('bg-neutral-800', 'ring-1', 'ring-neutral-500');
+        (item as HTMLElement).scrollIntoView({ block: 'nearest' });
+      } else {
+        item.classList.remove('bg-neutral-800', 'ring-1', 'ring-neutral-500');
+      }
+    });
+  }
+
+  // Keyboard navigation within search dialog
+  input?.addEventListener('keydown', (e) => {
+    const items = resultsContainer?.querySelectorAll('a.search-item') || [];
+    if (items.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex + 1) % items.length;
+      updateSelectedResult();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+      updateSelectedResult();
+    } else if (e.key === 'Enter' && selectedIndex >= 0 && selectedIndex < items.length) {
+      e.preventDefault();
+      const target = items[selectedIndex] as HTMLAnchorElement;
+      if (target) {
+        target.click();
+      }
+    }
+  });
+
+  // Perform search with debounce, AbortController, and escaping
   input?.addEventListener('input', () => {
     const query = input.value.trim();
     clearTimeout(debounceTimer);
+    selectedIndex = -1;
+
+    if (searchAbortController) {
+      searchAbortController.abort();
+    }
 
     if (!query) {
       if (resultsContainer) {
@@ -151,8 +203,12 @@
     }
 
     debounceTimer = window.setTimeout(async () => {
+      searchAbortController = new AbortController();
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+          signal: searchAbortController.signal,
+        });
+        if (!res.ok) throw new Error('Search failed');
         const data = await res.json();
         const results = data.results || [];
 
@@ -160,33 +216,36 @@
 
         if (!results.length) {
           if (resultsContainer) {
-            resultsContainer.innerHTML = `<div class="py-8 text-center text-xs font-mono text-neutral-500">No results found for "${query}"</div>`;
+            resultsContainer.innerHTML = `<div class="py-8 text-center text-xs font-mono text-neutral-500">No results found for "${escapeHtml(query)}"</div>`;
           }
           return;
         }
 
         if (resultsContainer) {
           resultsContainer.innerHTML = results.map((item: any) => {
-            const year = item.release_date ? item.release_date.substring(0, 4) : '';
+            const year = item.release_date ? escapeHtml(item.release_date.substring(0, 4)) : '';
             const poster = item.poster_path 
-              ? `https://image.tmdb.org/t/p/w92${item.poster_path}`
+              ? `https://image.tmdb.org/t/p/w92${escapeHtml(item.poster_path)}`
               : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="60" viewBox="0 0 40 60"%3E%3Crect width="40" height="60" fill="%23222"/%3E%3C/svg%3E';
             const watchUrl = item.imdb_id 
-              ? `/watch?imdb=${item.imdb_id}`
-              : `/watch?id=${item.id}&type=${item.media_type}`;
+              ? `/watch?imdb=${encodeURIComponent(item.imdb_id)}`
+              : `/watch?id=${encodeURIComponent(item.id)}&type=${encodeURIComponent(item.media_type)}`;
+            const safeTitle = escapeHtml(item.title || 'Untitled');
+            const safeType = escapeHtml(item.media_type || 'media');
+            const safeImdb = item.imdb_id ? escapeHtml(item.imdb_id) : '';
             
             return `
-              <a href="${watchUrl}" class="flex items-center gap-3 p-2 rounded-lg hover:bg-neutral-800 transition-colors group">
+              <a href="${watchUrl}" class="search-item flex items-center gap-3 p-2 rounded-lg hover:bg-neutral-800 transition-colors group">
                 <img src="${poster}" alt="" class="w-10 h-14 object-cover rounded bg-neutral-900 shrink-0" loading="lazy" />
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <span class="text-xs font-medium text-white group-hover:text-neutral-200 truncate">${item.title}</span>
-                    <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400">${item.media_type}</span>
+                    <span class="text-xs font-medium text-white group-hover:text-neutral-200 truncate">${safeTitle}</span>
+                    <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400">${safeType}</span>
                   </div>
                   <div class="flex items-center gap-2 mt-1 text-[11px] font-mono text-neutral-500">
                     ${year ? `<span>${year}</span>` : ''}
-                    ${item.vote_average ? `<span>★ ${item.vote_average}</span>` : ''}
-                    ${item.imdb_id ? `<span class="text-amber-400/80">${item.imdb_id}</span>` : ''}
+                    ${item.vote_average ? `<span>★ ${escapeHtml(String(item.vote_average))}</span>` : ''}
+                    ${safeImdb ? `<span class="text-amber-400/80">${safeImdb}</span>` : ''}
                   </div>
                 </div>
                 <svg class="w-4 h-4 text-neutral-600 group-hover:text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -196,7 +255,8 @@
             `;
           }).join('');
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
         if (statusEl) {
           statusEl.textContent = 'Search failed. Please try again.';
           statusEl.classList.remove('hidden');

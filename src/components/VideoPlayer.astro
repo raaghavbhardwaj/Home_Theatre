@@ -78,6 +78,39 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
       </p>
     </div>
 
+    <!-- Playback Error / Codec Fallback Overlay -->
+    <div id="stream-playback-error" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0d0d0d]/95 p-6 text-center">
+      <div class="w-12 h-12 rounded-full bg-amber-950/40 border border-amber-800/60 flex items-center justify-center mb-3 text-amber-500">
+        <svg class="w-6 h-6 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      </div>
+      <h3 class="text-white font-bold text-sm mb-1">Browser Playback Notice</h3>
+      <p class="text-neutral-400 text-xs max-w-md mb-4 font-sans leading-relaxed">
+        Your browser could not decode this stream format or audio codec (e.g. MKV/EAC3/DTS). Try another quality or open the stream in VLC / MPV.
+      </p>
+      <div class="flex items-center gap-3">
+        <a
+          id="error-external-btn"
+          href="#"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="px-4 py-2 rounded bg-white text-black font-semibold text-xs font-mono hover:bg-neutral-200 transition-colors"
+        >
+          Open in VLC / MPV
+        </a>
+        <button
+          id="error-retry-btn"
+          type="button"
+          class="px-4 py-2 rounded bg-neutral-900 border border-neutral-700 text-neutral-300 font-mono text-xs hover:border-neutral-500 transition-colors cursor-pointer"
+        >
+          Try Next Stream
+        </button>
+      </div>
+    </div>
+
     <!-- Native HTML5 Video Element -->
     <video
       id="main-video"
@@ -105,11 +138,118 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
   const video = document.getElementById('main-video') as HTMLVideoElement | null;
   const loadingOverlay = document.getElementById('stream-loading');
   const emptyOverlay = document.getElementById('stream-empty');
+  const errorOverlay = document.getElementById('stream-playback-error');
+  const errorExternalBtn = document.getElementById('error-external-btn') as HTMLAnchorElement | null;
+  const errorRetryBtn = document.getElementById('error-retry-btn') as HTMLButtonElement | null;
   const qualitySelector = document.getElementById('quality-selector');
   const playerDot = document.getElementById('player-dot');
   const statusText = document.getElementById('player-status-text');
   const activeBadge = document.getElementById('active-stream-badge');
   const externalLink = document.getElementById('external-stream-link') as HTMLAnchorElement | null;
+
+  let currentStreams: StreamItem[] = [];
+  let currentIdx = 0;
+  let hlsInstance: any = null;
+
+  function showPlaybackError(stream: StreamItem) {
+    if (errorOverlay) errorOverlay.classList.remove('hidden');
+    if (errorExternalBtn) errorExternalBtn.href = stream.url;
+    if (playerDot) playerDot.className = 'w-2 h-2 rounded-full bg-amber-500';
+    if (statusText) statusText.textContent = 'CODEC / PLAYBACK NOTICE:';
+  }
+
+  function hidePlaybackError() {
+    if (errorOverlay) errorOverlay.classList.add('hidden');
+  }
+
+  function cleanupHls() {
+    if (hlsInstance) {
+      try {
+        hlsInstance.destroy();
+      } catch {}
+      hlsInstance = null;
+    }
+  }
+
+  function loadHlsScript(): Promise<void> {
+    if ((window as any).Hls) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js';
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load HLS engine'));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function applyStream(stream: StreamItem) {
+    if (!video) return;
+    hidePlaybackError();
+    cleanupHls();
+
+    const isHls = stream.format === 'm3u8' || stream.url.includes('.m3u8');
+
+    if (isHls && !video.canPlayType('application/vnd.apple.mpegurl')) {
+      try {
+        await loadHlsScript();
+        const Hls = (window as any).Hls;
+        if (Hls && Hls.isSupported()) {
+          hlsInstance = new Hls({ enableWorker: true });
+          hlsInstance.loadSource(stream.url);
+          hlsInstance.attachMedia(video);
+          hlsInstance.on(Hls.Events.ERROR, (_: any, data: any) => {
+            if (data.fatal) {
+              showPlaybackError(stream);
+            }
+          });
+          return;
+        }
+      } catch {
+        // Fall back to direct video.src
+      }
+    }
+
+    video.src = stream.url;
+    video.load();
+  }
+
+  function selectStreamByIndex(index: number) {
+    if (!currentStreams.length || index < 0 || index >= currentStreams.length) return;
+    currentIdx = index;
+    const stream = currentStreams[currentIdx];
+
+    applyStream(stream);
+
+    if (activeBadge) {
+      activeBadge.textContent = stream.size ? `${stream.quality} (${stream.size})` : stream.quality;
+    }
+
+    if (externalLink) {
+      externalLink.href = stream.url;
+      externalLink.classList.remove('hidden');
+    }
+
+    const buttons = qualitySelector?.querySelectorAll('button') || [];
+    buttons.forEach((b, idx) => {
+      if (idx === currentIdx) {
+        b.className = 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-white text-black font-semibold';
+      } else {
+        b.className = 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800';
+      }
+    });
+  }
+
+  errorRetryBtn?.addEventListener('click', () => {
+    if (currentStreams.length > 1) {
+      selectStreamByIndex((currentIdx + 1) % currentStreams.length);
+    }
+  });
+
+  video?.addEventListener('error', () => {
+    if (currentStreams[currentIdx]) {
+      showPlaybackError(currentStreams[currentIdx]);
+    }
+  });
 
   async function initPlayer() {
     if (!wrapper || !video) return;
@@ -120,53 +260,25 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
       const res = await fetch(apiUrl);
       if (!res.ok) throw new Error('API failed');
       const data = await res.json();
-      const streams: StreamItem[] = data.streams || [];
+      currentStreams = data.streams || [];
 
-      if (streams.length === 0) {
+      if (currentStreams.length === 0) {
         if (loadingOverlay) loadingOverlay.style.display = 'none';
         if (emptyOverlay) emptyOverlay.classList.remove('hidden');
-        if (playerDot) {
-          playerDot.className = 'w-2 h-2 rounded-full bg-neutral-600';
-        }
+        if (playerDot) playerDot.className = 'w-2 h-2 rounded-full bg-neutral-600';
         if (statusText) statusText.textContent = 'STREAMS: UNAVAILABLE';
         return;
       }
 
       // Streams found
       if (loadingOverlay) loadingOverlay.style.display = 'none';
-      if (playerDot) {
-        playerDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
-      }
+      if (playerDot) playerDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
       if (statusText) statusText.textContent = 'AVAILABLE STREAMS:';
-
-      function selectStream(stream: StreamItem, btn?: HTMLButtonElement) {
-        if (!video) return;
-        video.src = stream.url;
-        video.load();
-
-        if (activeBadge) {
-          activeBadge.textContent = stream.size ? `${stream.quality} (${stream.size})` : stream.quality;
-        }
-
-        if (externalLink) {
-          externalLink.href = stream.url;
-          externalLink.classList.remove('hidden');
-        }
-
-        const buttons = qualitySelector?.querySelectorAll('button') || [];
-        buttons.forEach((b) => {
-          if (b === btn) {
-            b.className = 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-white text-black font-semibold';
-          } else {
-            b.className = 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800';
-          }
-        });
-      }
 
       // Populate quality switcher buttons
       if (qualitySelector) {
         qualitySelector.innerHTML = '';
-        streams.forEach((s, idx) => {
+        currentStreams.forEach((s, idx) => {
           const btn = document.createElement('button');
           btn.type = 'button';
           const label = s.size ? `${s.quality} [${s.size}]` : s.quality;
@@ -175,14 +287,13 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
             ? 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-white text-black font-semibold'
             : 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800';
           
-          btn.addEventListener('click', () => selectStream(s, btn));
+          btn.addEventListener('click', () => selectStreamByIndex(idx));
           qualitySelector.appendChild(btn);
         });
       }
 
-      // Load first (highest quality) stream
-      const firstBtn = qualitySelector?.querySelector('button') as HTMLButtonElement | null;
-      selectStream(streams[0], firstBtn || undefined);
+      // Load first stream
+      selectStreamByIndex(0);
 
     } catch (err) {
       if (loadingOverlay) loadingOverlay.style.display = 'none';
@@ -195,7 +306,6 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
   // Keyboard Shortcuts for video player
   window.addEventListener('keydown', (e) => {
     if (!video) return;
-    // Don't intercept if focus is inside an input/dialog
     const active = document.activeElement;
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
 
