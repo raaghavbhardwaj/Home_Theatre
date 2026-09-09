@@ -18,10 +18,34 @@ const {
 } = Astro.props;
 
 const isTv = mediaType === 'tv';
-const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${season}&episode=${episode}` : ''}`;
+const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${season}&episode=${episode}` : ''}${imdbId ? `&imdb=${imdbId}` : ''}`;
+
+let scraperApiUrl = 'https://cinejoy-worker.fancied.workers.dev';
+try {
+  // @ts-expect-error - cloudflare:workers is provided at runtime by Cloudflare Workers
+  const cf = await import('cloudflare:workers');
+  if (cf.env?.SCRAPER_API_URL) {
+    scraperApiUrl = cf.env.SCRAPER_API_URL as string;
+  }
+} catch {
+  if (typeof process !== 'undefined' && process.env?.SCRAPER_API_URL) {
+    scraperApiUrl = process.env.SCRAPER_API_URL;
+  }
+}
 ---
 
-<div class="flex flex-col gap-3 w-full" id="player-wrapper" data-api={apiUrl} data-title={title}>
+<div
+  class="flex flex-col gap-3 w-full"
+  id="player-wrapper"
+  data-api={apiUrl}
+  data-title={title}
+  data-scraper-url={scraperApiUrl}
+  data-tmdb={String(id)}
+  data-imdb={imdbId}
+  data-type={mediaType}
+  data-season={String(season)}
+  data-episode={String(episode)}
+>
   <!-- Controls & Quality Switcher Bar -->
   <div class="flex flex-wrap items-center justify-between gap-2 px-1 py-1 font-mono text-xs">
     <div class="flex flex-wrap items-center gap-2">
@@ -169,8 +193,30 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
     Events: { ERROR: string };
   }
 
-  interface WindowWithHls extends Window {
+  interface WindowWithResolver extends Window {
     Hls?: HlsConstructor;
+    CinejoyResolver?: {
+      resolve(query: {
+        tmdbId: string;
+        imdbId?: string;
+        mediaType: 'movie' | 'tv';
+        season?: number;
+        episode?: number;
+      }): Promise<StreamItem[]>;
+    };
+  }
+
+  function loadResolverScript(scraperUrl: string): Promise<void> {
+    const win = window as unknown as WindowWithResolver;
+    if (win.CinejoyResolver) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = `${scraperUrl.replace(/\/+$/, '')}/resolver.js`;
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load in-browser resolver script'));
+      document.head.appendChild(script);
+    });
   }
 
   let currentStreams: StreamItem[] = [];
@@ -252,7 +298,7 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
   }
 
   function loadHlsScript(): Promise<void> {
-    const win = window as unknown as WindowWithHls;
+    const win = window as unknown as WindowWithResolver;
     if (win.Hls) return Promise.resolve();
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
@@ -276,7 +322,7 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
     if (isHls && !video.canPlayType('application/vnd.apple.mpegurl')) {
       try {
         await loadHlsScript();
-        const win = window as unknown as WindowWithHls;
+        const win = window as unknown as WindowWithResolver;
         const Hls = win.Hls;
         if (Hls && Hls.isSupported()) {
           hlsInstance = new Hls({ enableWorker: true });
@@ -339,64 +385,100 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
   async function initPlayer() {
     if (!wrapper || !video) return;
     const apiUrl = wrapper.dataset.api;
-    if (!apiUrl) return;
+    const scraperUrl = wrapper.dataset.scraperUrl || '';
+    const tmdbId = wrapper.dataset.tmdb || '';
+    const imdbId = wrapper.dataset.imdb || '';
+    const mediaType = (wrapper.dataset.type || 'movie') as 'movie' | 'tv';
+    const season = parseInt(wrapper.dataset.season || '1', 10);
+    const episode = parseInt(wrapper.dataset.episode || '1', 10);
 
-    try {
-      const res = await fetch(apiUrl);
-      if (!res.ok) throw new Error('API failed');
-      const data = await res.json();
-      currentStreams = data.streams || [];
+    if (!apiUrl && !tmdbId) return;
 
-      if (currentStreams.length === 0) {
-        if (loadingOverlay) loadingOverlay.style.display = 'none';
-        if (emptyOverlay) emptyOverlay.classList.remove('hidden');
-        if (playerDot) playerDot.className = 'w-2 h-2 rounded-full bg-neutral-600';
-        if (statusText) statusText.textContent = 'STREAMS: UNAVAILABLE';
-        return;
+    // Strategy 1: Direct in-browser resolution (zero middlemen, user's residential IP)
+    if (scraperUrl && tmdbId) {
+      try {
+        await loadResolverScript(scraperUrl);
+        const win = window as unknown as WindowWithResolver;
+        if (win.CinejoyResolver) {
+          if (statusText) statusText.textContent = 'RESOLVING DIRECTLY:';
+          const resolvedStreams = await win.CinejoyResolver.resolve({
+            tmdbId,
+            imdbId: imdbId || undefined,
+            mediaType,
+            season: mediaType === 'tv' ? season : undefined,
+            episode: mediaType === 'tv' ? episode : undefined,
+          });
+          if (resolvedStreams.length > 0) {
+            currentStreams = resolvedStreams;
+            renderStreams();
+            return;
+          }
+        }
+      } catch {
+        // Browser resolution failed, fall through to edge API
       }
-
-      // Streams found
-      if (loadingOverlay) loadingOverlay.style.display = 'none';
-      if (playerDot) playerDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
-      if (statusText) statusText.textContent = 'AVAILABLE STREAMS:';
-
-      // Count occurrences to label duplicate qualities cleanly
-      const qualityCounts = new Map<string, number>();
-      currentStreams.forEach((s) => {
-        qualityCounts.set(s.quality, (qualityCounts.get(s.quality) || 0) + 1);
-      });
-      const qualitySeen = new Map<string, number>();
-
-      // Populate quality switcher buttons
-      if (qualitySelector) {
-        qualitySelector.innerHTML = '';
-        currentStreams.forEach((s, idx) => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          const count = qualityCounts.get(s.quality) || 1;
-          const seen = (qualitySeen.get(s.quality) || 0) + 1;
-          qualitySeen.set(s.quality, seen);
-          const suffix = count > 1 ? ` #${seen}` : '';
-          const label = s.size ? `${s.quality}${suffix} [${s.size}]` : `${s.quality}${suffix}`;
-          btn.textContent = label;
-          btn.className = idx === 0
-            ? 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-white text-black font-semibold'
-            : 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800';
-          
-          btn.addEventListener('click', () => selectStreamByIndex(idx));
-          qualitySelector.appendChild(btn);
-        });
-      }
-
-      // Load first stream
-      selectStreamByIndex(0);
-
-    } catch (err) {
-      if (loadingOverlay) loadingOverlay.style.display = 'none';
-      if (emptyOverlay) emptyOverlay.classList.remove('hidden');
-      if (playerDot) playerDot.className = 'w-2 h-2 rounded-full bg-red-500';
-      if (statusText) statusText.textContent = 'STREAMS: ERROR';
     }
+
+    // Strategy 2: Fallback to /api/streams edge proxy (service binding or SCRAPER_API_URL)
+    if (apiUrl) {
+      try {
+        if (statusText) statusText.textContent = 'RESOLVING VIA EDGE:';
+        const res = await fetch(apiUrl);
+        if (!res.ok) throw new Error('API failed');
+        const data = await res.json() as { streams?: StreamItem[] };
+        currentStreams = data.streams || [];
+
+        if (currentStreams.length > 0) {
+          renderStreams();
+          return;
+        }
+      } catch {
+        // Edge API also failed
+      }
+    }
+
+    // No streams from either strategy
+    if (loadingOverlay) loadingOverlay.style.display = 'none';
+    if (emptyOverlay) emptyOverlay.classList.remove('hidden');
+    if (playerDot) playerDot.className = 'w-2 h-2 rounded-full bg-neutral-600';
+    if (statusText) statusText.textContent = 'STREAMS: UNAVAILABLE';
+  }
+
+  function renderStreams() {
+    if (loadingOverlay) loadingOverlay.style.display = 'none';
+    if (playerDot) playerDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+    if (statusText) statusText.textContent = 'AVAILABLE STREAMS:';
+
+    // Count occurrences to label duplicate qualities cleanly
+    const qualityCounts = new Map<string, number>();
+    currentStreams.forEach((s) => {
+      qualityCounts.set(s.quality, (qualityCounts.get(s.quality) || 0) + 1);
+    });
+    const qualitySeen = new Map<string, number>();
+
+    // Populate quality switcher buttons
+    if (qualitySelector) {
+      qualitySelector.innerHTML = '';
+      currentStreams.forEach((s, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const count = qualityCounts.get(s.quality) || 1;
+        const seen = (qualitySeen.get(s.quality) || 0) + 1;
+        qualitySeen.set(s.quality, seen);
+        const suffix = count > 1 ? ` #${seen}` : '';
+        const label = s.size ? `${s.quality}${suffix} [${s.size}]` : `${s.quality}${suffix}`;
+        btn.textContent = label;
+        btn.className = idx === 0
+          ? 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-white text-black font-semibold'
+          : 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800';
+        
+        btn.addEventListener('click', () => selectStreamByIndex(idx));
+        qualitySelector.appendChild(btn);
+      });
+    }
+
+    // Load first stream
+    selectStreamByIndex(0);
   }
 
   // Keyboard Shortcuts for video player
