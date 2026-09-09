@@ -356,7 +356,7 @@ try {
     applyStream(stream);
 
     if (activeBadge) {
-      activeBadge.textContent = stream.size ? `${stream.quality} (${stream.size})` : stream.quality;
+      activeBadge.textContent = stream.title || `${stream.name} - ${stream.quality}`;
     }
 
     if (externalLink) {
@@ -487,11 +487,22 @@ try {
       currentStreams.forEach((s, idx) => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        const count = qualityCounts.get(s.quality) || 1;
-        const seen = (qualitySeen.get(s.quality) || 0) + 1;
-        qualitySeen.set(s.quality, seen);
-        const suffix = count > 1 ? ` #${seen}` : '';
-        const label = s.size ? `${s.quality}${suffix} [${s.size}]` : `${s.quality}${suffix}`;
+        // Display clear provider and server tags (e.g. HDHub4u (4K), Lisbon (4K), Solara (1080p))
+        let label = s.quality;
+        if (s.name === 'HDHub4u' || s.provider === 'hdhub4u') {
+          label = `HDHub4u (${s.quality})`;
+        } else if (s.title && s.title.includes('[')) {
+          const m = s.title.match(/\[(.*?)\]/);
+          const srv = m ? m[1] : (s.name || 'Server');
+          label = `${srv} (${s.quality})`;
+        } else if (s.name) {
+          label = `${s.name} (${s.quality})`;
+        }
+
+        if (s.size) {
+          label += ` [${s.size}]`;
+        }
+
         btn.textContent = label;
         btn.className = idx === 0
           ? 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-white text-black font-semibold'
