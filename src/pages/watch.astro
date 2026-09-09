@@ -62,7 +62,7 @@ const pageTitle = mediaType === 'tv'
 const year = details.release_date ? details.release_date.substring(0, 4) : '';
 ---
 
-<Layout title={pageTitle} description={details.overview}>
+<Layout title={pageTitle} description={details.overview} preconnectImages={true}>
   <div class="flex flex-col gap-6 max-w-6xl mx-auto">
     <!-- Breadcrumb / Header bar -->
     <div class="flex flex-wrap items-center justify-between gap-3 text-xs font-mono border-b border-[#222222] pb-3">

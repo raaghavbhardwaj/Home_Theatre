@@ -197,262 +197,255 @@ if (queryParam.trim()) {
   </div>
 </Layout>
 
-<script>
-  // Zero-React Spotlight Client Controller
-  const input = document.getElementById('spotlight-input') as HTMLInputElement | null;
-  const clearBtn = document.getElementById('spotlight-clear-btn');
-  const resultsContainer = document.getElementById('spotlight-results');
-  const suggestionsContainer = document.getElementById('spotlight-suggestions');
-  const emptyContainer = document.getElementById('spotlight-empty');
-  const statusEl = document.getElementById('spotlight-status');
+<script is:inline>
+  (() => {
+    // Zero-React Spotlight Client Controller
+    const input = document.getElementById('spotlight-input');
+    const clearBtn = document.getElementById('spotlight-clear-btn');
+    const resultsContainer = document.getElementById('spotlight-results');
+    const suggestionsContainer = document.getElementById('spotlight-suggestions');
+    const emptyContainer = document.getElementById('spotlight-empty');
+    const statusEl = document.getElementById('spotlight-status');
 
-  let debounceTimer: number | undefined;
-  let searchAbortController: AbortController | null = null;
-  let selectedIndex = -1;
+    let debounceTimer;
+    let searchAbortController = null;
+    let selectedIndex = -1;
 
-  function escapeHtml(str: string): string {
-    return str.replace(/[&<>"']/g, (m) => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;',
-    }[m] || m));
-  }
+    function escapeHtml(str) {
+      return String(str || '').replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+      }[m] || m));
+    }
 
-  function updateSelectedResult() {
-    const items = resultsContainer?.querySelectorAll('a.spotlight-item') || [];
-    items.forEach((item, idx) => {
-      if (idx === selectedIndex) {
-        item.classList.add('bg-neutral-800', 'ring-1', 'ring-neutral-500');
-        item.setAttribute('aria-selected', 'true');
-        (item as HTMLElement).scrollIntoView({ block: 'nearest' });
-        if (item.id) input?.setAttribute('aria-activedescendant', item.id);
-      } else {
-        item.classList.remove('bg-neutral-800', 'ring-1', 'ring-neutral-500');
-        item.setAttribute('aria-selected', 'false');
+    function updateSelectedResult() {
+      const items = resultsContainer ? resultsContainer.querySelectorAll('a.spotlight-item') : [];
+      items.forEach((item, idx) => {
+        if (idx === selectedIndex) {
+          item.classList.add('bg-neutral-800', 'ring-1', 'ring-neutral-500');
+          item.setAttribute('aria-selected', 'true');
+          item.scrollIntoView({ block: 'nearest' });
+          if (item.id && input) input.setAttribute('aria-activedescendant', item.id);
+        } else {
+          item.classList.remove('bg-neutral-800', 'ring-1', 'ring-neutral-500');
+          item.setAttribute('aria-selected', 'false');
+        }
+      });
+      if (selectedIndex === -1 && input) {
+        input.removeAttribute('aria-activedescendant');
       }
-    });
-    if (selectedIndex === -1) {
-      input?.removeAttribute('aria-activedescendant');
-    }
-  }
-
-  // Keyboard navigation
-  window.addEventListener('keydown', (e) => {
-    // '/' hotkey to focus search bar
-    if (e.key === '/' && document.activeElement !== input) {
-      e.preventDefault();
-      input?.focus();
-      input?.select();
-      return;
     }
 
-    if (e.key === 'Escape' && document.activeElement === input) {
-      e.preventDefault();
-      if (input) input.value = '';
-      if (clearBtn) clearBtn.classList.add('hidden');
-      resetToDefaultState();
-      return;
-    }
-
-    const items = resultsContainer?.querySelectorAll('a.spotlight-item') || [];
-    if (items.length === 0 || resultsContainer?.classList.contains('hidden')) return;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      selectedIndex = (selectedIndex + 1) % items.length;
-      updateSelectedResult();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      selectedIndex = (selectedIndex - 1 + items.length) % items.length;
-      updateSelectedResult();
-    } else if (e.key === 'Enter' && selectedIndex >= 0 && selectedIndex < items.length) {
-      e.preventDefault();
-      const target = items[selectedIndex] as HTMLAnchorElement;
-      if (target) target.click();
-    } else if (e.key === 'Enter' && items.length > 0 && selectedIndex === -1) {
-      // First result on Enter if none explicitly highlighted
-      e.preventDefault();
-      const target = items[0] as HTMLAnchorElement;
-      if (target) target.click();
-    }
-  });
-
-  function resetToDefaultState() {
-    selectedIndex = -1;
-    input?.setAttribute('aria-expanded', 'false');
-    input?.removeAttribute('aria-activedescendant');
-    if (resultsContainer) {
-      resultsContainer.innerHTML = '';
-      resultsContainer.classList.add('hidden');
-    }
-    if (emptyContainer) {
-      emptyContainer.textContent = '';
-      emptyContainer.classList.add('hidden');
-    }
-    suggestionsContainer?.classList.remove('hidden');
-    if (statusEl) statusEl.classList.add('hidden');
-  }
-
-  function bindSampleButtons() {
-    document.querySelectorAll('.sample-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const query = btn.getAttribute('data-sample') || '';
-        if (input) {
-          input.value = query;
-          input.focus();
-          triggerSearch(query);
-        }
-      });
-    });
-  }
-
-  clearBtn?.addEventListener('click', () => {
-    if (input) {
-      input.value = '';
-      input.focus();
-    }
-    clearBtn.classList.add('hidden');
-    resetToDefaultState();
-  });
-
-  async function triggerSearch(query: string) {
-    const trimmed = query.trim();
-    selectedIndex = -1;
-
-    if (clearBtn) {
-      if (trimmed) clearBtn.classList.remove('hidden');
-      else clearBtn.classList.add('hidden');
-    }
-
-    if (!trimmed) {
-      resetToDefaultState();
-      return;
-    }
-
-    suggestionsContainer?.classList.add('hidden');
-    if (emptyContainer) {
-      emptyContainer.textContent = '';
-      emptyContainer.classList.add('hidden');
-    }
-
-    if (searchAbortController) {
-      searchAbortController.abort();
-    }
-
-    if (statusEl) {
-      statusEl.textContent = 'Searching...';
-      statusEl.classList.remove('hidden');
-    }
-
-    searchAbortController = new AbortController();
-
-    try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
-        signal: searchAbortController.signal,
-      });
-      if (!res.ok) throw new Error('Search failed');
-      const data = await res.json();
-      const results = data.results || [];
-
-      if (statusEl) statusEl.classList.add('hidden');
-
-      if (!results.length) {
-        input?.setAttribute('aria-expanded', 'false');
-        if (resultsContainer) {
-          resultsContainer.innerHTML = '';
-          resultsContainer.classList.add('hidden');
-        }
-        if (emptyContainer) {
-          emptyContainer.textContent = `No titles found for "${trimmed}"`;
-          emptyContainer.classList.remove('hidden');
-        }
+    // Keyboard navigation
+    window.addEventListener('keydown', (e) => {
+      // '/' hotkey to focus search bar
+      if (e.key === '/' && document.activeElement !== input) {
+        e.preventDefault();
+        input?.focus();
+        input?.select();
         return;
       }
 
-      interface SearchResultItem {
-        id: number;
-        title: string;
-        poster_path?: string | null;
-        media_type: 'movie' | 'tv';
-        release_date?: string;
-        vote_average?: number;
-        imdb_id?: string;
+      if (e.key === 'Escape' && document.activeElement === input) {
+        e.preventDefault();
+        if (input) input.value = '';
+        if (clearBtn) clearBtn.classList.add('hidden');
+        resetToDefaultState();
+        return;
       }
 
+      const items = resultsContainer ? resultsContainer.querySelectorAll('a.spotlight-item') : [];
+      if (items.length === 0 || resultsContainer?.classList.contains('hidden')) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex + 1) % items.length;
+        updateSelectedResult();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+        updateSelectedResult();
+      } else if (e.key === 'Enter' && selectedIndex >= 0 && selectedIndex < items.length) {
+        e.preventDefault();
+        const target = items[selectedIndex];
+        if (target) target.click();
+      } else if (e.key === 'Enter' && items.length > 0 && selectedIndex === -1) {
+        e.preventDefault();
+        const target = items[0];
+        if (target) target.click();
+      }
+    });
+
+    function resetToDefaultState() {
+      selectedIndex = -1;
+      if (input) {
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+      }
       if (resultsContainer) {
-        resultsContainer.innerHTML = (results as SearchResultItem[]).map((item, idx) => {
-          const year = item.release_date ? escapeHtml(item.release_date.substring(0, 4)) : '';
-          const poster = item.poster_path
-            ? `https://image.tmdb.org/t/p/w92${escapeHtml(item.poster_path)}`
-            : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="60" viewBox="0 0 40 60"%3E%3Crect width="40" height="60" fill="%23222"/%3E%3C/svg%3E';
-          const watchUrl = item.imdb_id
-            ? `/watch?imdb=${encodeURIComponent(item.imdb_id)}`
-            : `/watch?id=${encodeURIComponent(item.id)}&type=${encodeURIComponent(item.media_type)}`;
-          const safeTitle = escapeHtml(item.title || 'Untitled');
-          const safeType = escapeHtml(item.media_type || 'media');
-          const safeImdb = item.imdb_id ? escapeHtml(item.imdb_id) : '';
-
-          return `
-            <a
-              id="spotlight-opt-${idx}"
-              href="${watchUrl}"
-              role="option"
-              aria-selected="false"
-              aria-label="${safeTitle} (${safeType.toUpperCase()})"
-              class="spotlight-item flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-neutral-800/80 transition-all group"
-            >
-              <img
-                src="${poster}"
-                alt=""
-                width="44"
-                height="64"
-                decoding="async"
-                class="w-11 h-16 object-cover rounded-md bg-neutral-900 shrink-0 border border-neutral-800"
-                loading="lazy"
-              />
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-1">
-                  <span class="text-sm font-semibold text-white group-hover:text-neutral-100 truncate">${safeTitle}</span>
-                  <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-700 text-neutral-400">${safeType}</span>
-                </div>
-                <div class="flex items-center gap-3 text-xs font-mono text-neutral-400">
-                  ${year ? `<span>${year}</span>` : ''}
-                  ${item.vote_average ? `<span class="text-amber-400/90 font-medium">★ ${escapeHtml(String(item.vote_average))}</span>` : ''}
-                  ${safeImdb ? `<span class="text-neutral-400">${safeImdb}</span>` : ''}
-                </div>
-              </div>
-              <div class="shrink-0 flex items-center text-neutral-600 group-hover:text-white transition-colors">
-                <span class="hidden sm:inline font-mono text-[11px] mr-1 text-neutral-400 group-hover:text-neutral-200">PLAY</span>
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </a>
-          `;
-        }).join('');
-        resultsContainer.classList.remove('hidden');
-        input?.setAttribute('aria-expanded', 'true');
+        resultsContainer.innerHTML = '';
+        resultsContainer.classList.add('hidden');
       }
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (emptyContainer) {
+        emptyContainer.textContent = '';
+        emptyContainer.classList.add('hidden');
+      }
+      if (suggestionsContainer) suggestionsContainer.classList.remove('hidden');
+      if (statusEl) statusEl.classList.add('hidden');
+    }
+
+    function bindSampleButtons() {
+      document.querySelectorAll('.sample-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const query = btn.getAttribute('data-sample') || '';
+          if (input) {
+            input.value = query;
+            input.focus();
+            triggerSearch(query);
+          }
+        });
+      });
+    }
+
+    clearBtn?.addEventListener('click', () => {
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+      clearBtn.classList.add('hidden');
+      resetToDefaultState();
+    });
+
+    async function triggerSearch(query) {
+      const trimmed = query.trim();
+      selectedIndex = -1;
+
+      if (clearBtn) {
+        if (trimmed) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+      }
+
+      if (!trimmed) {
+        resetToDefaultState();
+        return;
+      }
+
+      if (suggestionsContainer) suggestionsContainer.classList.add('hidden');
+      if (emptyContainer) {
+        emptyContainer.textContent = '';
+        emptyContainer.classList.add('hidden');
+      }
+
+      if (searchAbortController) {
+        searchAbortController.abort();
+      }
+
       if (statusEl) {
-        statusEl.textContent = 'Search failed. Please try again.';
+        statusEl.textContent = 'Searching...';
         statusEl.classList.remove('hidden');
       }
-    }
-  }
 
-  input?.addEventListener('input', () => {
-    clearTimeout(debounceTimer);
-    const val = input.value;
-    if (clearBtn) {
-      if (val.trim()) clearBtn.classList.remove('hidden');
-      else clearBtn.classList.add('hidden');
-    }
-    debounceTimer = window.setTimeout(() => triggerSearch(val), 200);
-  });
+      searchAbortController = new AbortController();
 
-  bindSampleButtons();
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
+          signal: searchAbortController.signal,
+        });
+        if (!res.ok) throw new Error('Search failed');
+        const data = await res.json();
+        const results = data.results || [];
+
+        if (statusEl) statusEl.classList.add('hidden');
+
+        if (!results.length) {
+          if (input) input.setAttribute('aria-expanded', 'false');
+          if (resultsContainer) {
+            resultsContainer.innerHTML = '';
+            resultsContainer.classList.add('hidden');
+          }
+          if (emptyContainer) {
+            emptyContainer.textContent = `No titles found for "${trimmed}"`;
+            emptyContainer.classList.remove('hidden');
+          }
+          return;
+        }
+
+        if (resultsContainer) {
+          resultsContainer.innerHTML = results.map((item, idx) => {
+            const year = item.release_date ? escapeHtml(item.release_date.substring(0, 4)) : '';
+            const poster = item.poster_path
+              ? `https://image.tmdb.org/t/p/w92${escapeHtml(item.poster_path)}`
+              : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="60" viewBox="0 0 40 60"%3E%3Crect width="40" height="60" fill="%23222"/%3E%3C/svg%3E';
+            const watchUrl = item.imdb_id
+              ? `/watch?imdb=${encodeURIComponent(item.imdb_id)}`
+              : `/watch?id=${encodeURIComponent(item.id)}&type=${encodeURIComponent(item.media_type)}`;
+            const safeTitle = escapeHtml(item.title || 'Untitled');
+            const safeType = escapeHtml(item.media_type || 'media');
+            const safeImdb = item.imdb_id ? escapeHtml(item.imdb_id) : '';
+
+            return `
+              <a
+                id="spotlight-opt-${idx}"
+                href="${watchUrl}"
+                role="option"
+                aria-selected="false"
+                aria-label="${safeTitle} (${safeType.toUpperCase()})"
+                class="spotlight-item flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-neutral-800/80 transition-all group"
+              >
+                <img
+                  src="${poster}"
+                  alt=""
+                  width="44"
+                  height="64"
+                  decoding="async"
+                  class="w-11 h-16 object-cover rounded-md bg-neutral-900 shrink-0 border border-neutral-800"
+                  loading="lazy"
+                />
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-sm font-semibold text-white group-hover:text-neutral-100 truncate">${safeTitle}</span>
+                    <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-700 text-neutral-400">${safeType}</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-xs font-mono text-neutral-400">
+                    ${year ? `<span>${year}</span>` : ''}
+                    ${item.vote_average ? `<span class="text-amber-400/90 font-medium">★ ${escapeHtml(String(item.vote_average))}</span>` : ''}
+                    ${safeImdb ? `<span class="text-neutral-400">${safeImdb}</span>` : ''}
+                  </div>
+                </div>
+                <div class="shrink-0 flex items-center text-neutral-600 group-hover:text-white transition-colors">
+                  <span class="hidden sm:inline font-mono text-[11px] mr-1 text-neutral-400 group-hover:text-neutral-200">PLAY</span>
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </a>
+            `;
+          }).join('');
+          resultsContainer.classList.remove('hidden');
+          if (input) input.setAttribute('aria-expanded', 'true');
+        }
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        if (statusEl) {
+          statusEl.textContent = 'Search failed. Please try again.';
+          statusEl.classList.remove('hidden');
+        }
+      }
+    }
+
+    input?.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const val = input.value;
+      if (clearBtn) {
+        if (val.trim()) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+      }
+      debounceTimer = window.setTimeout(() => triggerSearch(val), 200);
+    });
+
+    bindSampleButtons();
+  })();
 </script>
