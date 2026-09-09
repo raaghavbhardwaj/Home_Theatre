@@ -54,29 +54,46 @@ src/
 
 To keep `Home_Theatre` 100% legal and safe to host publicly on GitHub and Cloudflare:
 
-### Option 1: Remote Worker Adapter (Recommended)
-Deploy your scraping logic to a separate private Cloudflare Worker. Point `Home_Theatre` to it using environment variables:
+### Option 1: Remote Worker Adapter & Service Binding (Recommended)
+Deploy your scraping logic to a separate private Cloudflare Worker (e.g. `cinejoy-worker`). Point `Home_Theatre` to it using environment variables or a high-performance Cloudflare Worker Service Binding:
 
+**Method A: Cloudflare Worker Service Binding (Zero Latency Edge IPC)**:
+In `wrangler.jsonc`:
+```jsonc
+{
+  "services": [
+    {
+      "binding": "SCRAPER_SERVICE",
+      "service": "cinejoy-worker"
+    }
+  ]
+}
+```
+
+**Method B: Public / External URL**:
 ```bash
 # In .env or Cloudflare Worker secrets / environment variables
 SCRAPER_API_URL="https://my-private-scraper.workers.dev"
 ```
 
-The remote worker must implement a simple HTTP JSON endpoint:
+The remote worker implements a standard HTTP JSON endpoint:
 ```
-GET /?tmdbId=550&type=movie
-GET /?tmdbId=1399&type=tv&season=1&episode=1
+GET /api/streams?id=550&type=movie
+GET /api/streams?id=1399&type=tv&season=1&episode=1
 ```
 Returning:
 ```json
 {
   "streams": [
     {
-      "name": "Server 1",
-      "title": "Server 1 — 1080p",
+      "name": "Cinejoy",
+      "title": "Cinejoy — 4K",
       "url": "https://stream.example.com/master.m3u8",
-      "quality": "1080p",
-      "format": "m3u8"
+      "quality": "4K",
+      "format": "m3u8",
+      "subtitles": [
+        { "language": "en", "name": "English", "url": "https://subtitles.example.com/en.vtt" }
+      ]
     }
   ]
 }

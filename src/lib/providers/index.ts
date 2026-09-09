@@ -70,11 +70,16 @@ export async function resolveAllStreams(
   mediaType: 'movie' | 'tv',
   season?: number,
   episode?: number,
-  imdbId?: string
+  imdbId?: string,
+  scraperApiUrl?: string,
+  fetcher?: { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> }
 ): Promise<Stream[]> {
-  const activeProviders = PROVIDERS.filter((p) => p.enabled).sort(
-    (a, b) => a.priority - b.priority
-  );
+  const dynamicRemote = (scraperApiUrl || fetcher) ? new RemoteScraperProvider(scraperApiUrl, fetcher) : null;
+  const staticProviders = PROVIDERS.filter((p) => p.id !== 'remote-scraper' && p.enabled);
+  const activeProviders = [
+    ...(dynamicRemote ? [dynamicRemote] : PROVIDERS.filter((p) => p.id === 'remote-scraper' && p.enabled)),
+    ...staticProviders,
+  ].sort((a, b) => a.priority - b.priority);
 
   const results = await Promise.allSettled(
     activeProviders.map((p) =>

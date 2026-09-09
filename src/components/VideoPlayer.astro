@@ -126,6 +126,12 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
 </div>
 
 <script>
+  interface SubtitleItem {
+    url: string;
+    language: string;
+    name: string;
+  }
+
   interface StreamItem {
     name: string;
     title: string;
@@ -133,6 +139,7 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
     quality: string;
     size?: string;
     format?: string;
+    subtitles?: SubtitleItem[];
   }
 
   const wrapper = document.getElementById('player-wrapper');
@@ -205,6 +212,22 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
     if (!video) return;
     hidePlaybackError();
     cleanupHls();
+
+    // Clear old subtitle tracks
+    video.querySelectorAll('track').forEach((t) => t.remove());
+
+    // Inject subtitle tracks if available
+    if (Array.isArray(stream.subtitles)) {
+      for (const sub of stream.subtitles) {
+        if (!sub.url) continue;
+        const track = document.createElement('track');
+        track.kind = 'subtitles';
+        track.label = sub.name || sub.language || 'Subtitles';
+        track.srclang = sub.language || 'en';
+        track.src = sub.url;
+        video.appendChild(track);
+      }
+    }
 
     const isHls = stream.format === 'm3u8' || stream.url.includes('.m3u8');
 
@@ -295,13 +318,24 @@ const apiUrl = `/api/streams?id=${id}&type=${mediaType}${isTv ? `&season=${seaso
       if (playerDot) playerDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
       if (statusText) statusText.textContent = 'AVAILABLE STREAMS:';
 
+      // Count occurrences to label duplicate qualities cleanly
+      const qualityCounts = new Map<string, number>();
+      currentStreams.forEach((s) => {
+        qualityCounts.set(s.quality, (qualityCounts.get(s.quality) || 0) + 1);
+      });
+      const qualitySeen = new Map<string, number>();
+
       // Populate quality switcher buttons
       if (qualitySelector) {
         qualitySelector.innerHTML = '';
         currentStreams.forEach((s, idx) => {
           const btn = document.createElement('button');
           btn.type = 'button';
-          const label = s.size ? `${s.quality} [${s.size}]` : s.quality;
+          const count = qualityCounts.get(s.quality) || 1;
+          const seen = (qualitySeen.get(s.quality) || 0) + 1;
+          qualitySeen.set(s.quality, seen);
+          const suffix = count > 1 ? ` #${seen}` : '';
+          const label = s.size ? `${s.quality}${suffix} [${s.size}]` : `${s.quality}${suffix}`;
           btn.textContent = label;
           btn.className = idx === 0
             ? 'px-2.5 py-1 rounded text-xs transition-colors cursor-pointer bg-white text-black font-semibold'

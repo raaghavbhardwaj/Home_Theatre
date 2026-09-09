@@ -62,10 +62,11 @@ Every source file in the project belongs strictly to one of the following 5 deco
 
 To preserve 100% legality and compliance with GitHub Terms of Service:
 1. **Never commit actual scrapers or piracy endpoints into the main repository.**
-2. **Mode 1: Remote Worker Adapter (Recommended)**:
-   - Host the scraper in a completely separate, private Cloudflare Worker.
-   - Point `Home_Theatre` to it using the `SCRAPER_API_URL` or `PROVIDER_API_URL` environment variable.
-   - `RemoteScraperProvider` forwards queries and normalizes the stream results with Cloudflare edge caching.
+2. **Mode 1: Remote Worker Adapter & Service Binding (Recommended)**:
+   - Host the scraper in a completely separate, private Cloudflare Worker (e.g. `cinejoy-worker`).
+   - Point `Home_Theatre` to it using the `SCRAPER_API_URL` environment variable or direct Cloudflare Worker Service Binding (`services: [{ binding: "SCRAPER_SERVICE", service: "cinejoy-worker" }]`).
+   - Service Bindings provide 0ms latency direct worker-to-worker edge invocation with zero public DNS routing hops or WAF blocks.
+   - `RemoteScraperProvider` automatically utilizes the service binding when present, or gracefully falls back to public HTTP fetch with Cloudflare edge subrequest caching.
 3. **Mode 2: Private Git Submodule (`src/lib/providers/plugins/`)**:
    - Link a private repository as a submodule in `src/lib/providers/plugins/`.
    - Everything inside `src/lib/providers/plugins/` (except `README.md` and `.gitkeep`) is ignored by `.gitignore`.

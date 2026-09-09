@@ -21,7 +21,8 @@ export const OPTIONS: APIRoute = async () => {
   return new Response(null, { headers: CORS_HEADERS });
 };
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async (context) => {
+  const { url, locals } = context;
   let tmdbId = url.searchParams.get('id') || url.searchParams.get('tmdb');
   const imdbId = url.searchParams.get('imdb') || undefined;
   const rawType = (url.searchParams.get('type') || 'movie').toLowerCase();
@@ -47,12 +48,39 @@ export const GET: APIRoute = async ({ url }) => {
     );
   }
 
+  let scraperApiUrl: string | undefined;
+  let scraperService: { fetch: typeof fetch } | undefined;
   try {
-    const streams = await resolveAllStreams(tmdbId, mediaType, season, episode, imdbId);
+    // @ts-expect-error - cloudflare:workers is provided at runtime by Cloudflare Workers
+    const cf = await import('cloudflare:workers');
+    scraperApiUrl = (cf.env?.SCRAPER_API_URL as string) || (cf.env?.PROVIDER_API_URL as string);
+    if (cf.env?.SCRAPER_SERVICE && typeof cf.env.SCRAPER_SERVICE.fetch === 'function') {
+      scraperService = cf.env.SCRAPER_SERVICE as { fetch: typeof fetch };
+    }
+  } catch {
+    // Fallback for non-Cloudflare runtimes
+  }
+
+  if (!scraperApiUrl && typeof process !== 'undefined') {
+    scraperApiUrl = process.env?.SCRAPER_API_URL || process.env?.PROVIDER_API_URL;
+  }
+
+  try {
+    const streams = await resolveAllStreams(
+      tmdbId,
+      mediaType,
+      season,
+      episode,
+      imdbId,
+      scraperApiUrl,
+      scraperService
+    );
     return new Response(
       JSON.stringify({
         success: true,
         count: streams.length,
+        serviceBinding: Boolean(scraperService),
+        scraperApiUrl: scraperApiUrl || null,
         streams,
       }),
       { status: 200, headers: CORS_HEADERS }

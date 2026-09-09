@@ -14,20 +14,30 @@ interface CloudflareFetchInit extends RequestInit {
   };
 }
 
+export type Fetcher = {
+  fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+};
+
 export class RemoteScraperProvider implements ScraperProvider {
   readonly id = 'remote-scraper';
   readonly name = 'Remote Scraper Service';
   readonly priority = 1;
 
   private endpoint: string;
+  private fetcher?: Fetcher;
 
-  constructor(endpoint?: string) {
-    const raw = endpoint || (typeof process !== 'undefined' ? process.env?.SCRAPER_API_URL || process.env?.PROVIDER_API_URL : '') || '';
-    this.endpoint = raw.trim().replace(/\/+$/, '');
+  constructor(endpoint?: string, fetcher?: Fetcher) {
+    const raw =
+      endpoint ||
+      (typeof import.meta !== 'undefined' && (import.meta.env?.SCRAPER_API_URL || import.meta.env?.PROVIDER_API_URL)) ||
+      (typeof process !== 'undefined' ? process.env?.SCRAPER_API_URL || process.env?.PROVIDER_API_URL : '') ||
+      'https://cinejoy-worker.fancied.workers.dev';
+    this.endpoint = String(raw).trim().replace(/\/+$/, '');
+    this.fetcher = fetcher;
   }
 
   get enabled(): boolean {
-    return Boolean(this.endpoint);
+    return Boolean(this.endpoint) || Boolean(this.fetcher);
   }
 
   async resolve(
@@ -48,23 +58,27 @@ export class RemoteScraperProvider implements ScraperProvider {
     if (imdbId) params.set('imdb', imdbId);
 
     try {
-      const url = `${this.endpoint}/api/streams?${params.toString()}`;
+      const baseUrl = this.fetcher
+        ? 'http://cinejoy-worker'
+        : (this.endpoint || 'https://cinejoy-worker.fancied.workers.dev');
+      const url = `${baseUrl}/api/streams?${params.toString()}`;
       const init: CloudflareFetchInit = {
         headers: {
           Accept: 'application/json',
         },
-        cf: {
-          cacheTtl: 1800,
-          cacheEverything: true,
-        },
       };
 
-      const res = await fetch(url, init);
-      if (!res.ok) return [];
+      const fetchFn = this.fetcher ? this.fetcher.fetch.bind(this.fetcher) : fetch;
+      const res = await fetchFn(url, init);
+      if (!res.ok) {
+        console.error(`[RemoteScraper] HTTP ${res.status}: ${res.statusText}`);
+        return [];
+      }
 
       const data = (await res.json()) as { streams?: Stream[] };
       return Array.isArray(data.streams) ? data.streams : [];
-    } catch {
+    } catch (err) {
+      console.error('[RemoteScraper] Fetch failed:', err);
       return [];
     }
   }

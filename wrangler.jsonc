@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "home-theatre",
+  "compatibility_date": "2026-09-07",
+  "vars": {
+    "SCRAPER_API_URL": "https://cinejoy-worker.fancied.workers.dev"
+  },
+  "services": [
+    {
+      "binding": "SCRAPER_SERVICE",
+      "service": "cinejoy-worker"
+    }
+  ]
+}
