@@ -161,6 +161,7 @@ try {
     name: string;
     title: string;
     url: string;
+    directUrl?: string;
     quality: string;
     size?: string;
     format?: string;
@@ -226,7 +227,7 @@ try {
 
   function showPlaybackError(stream: StreamItem) {
     if (errorOverlay) errorOverlay.classList.remove('hidden');
-    if (errorExternalBtn) errorExternalBtn.href = stream.url;
+    if (errorExternalBtn) errorExternalBtn.href = stream.directUrl || stream.url;
     if (playerDot) playerDot.className = 'w-2 h-2 rounded-full bg-amber-500';
     if (statusText) statusText.textContent = 'CODEC / PLAYBACK NOTICE:';
   }
@@ -329,6 +330,7 @@ try {
           hlsInstance.loadSource(stream.url);
           hlsInstance.attachMedia(video);
           hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
+            console.error('[HLS Error]', data);
             if (data.fatal) {
               showPlaybackError(stream);
             }
@@ -356,7 +358,7 @@ try {
     }
 
     if (externalLink) {
-      externalLink.href = stream.url;
+      externalLink.href = stream.directUrl || stream.url;
       externalLink.classList.remove('hidden');
     }
 
@@ -394,6 +396,25 @@ try {
 
     if (!apiUrl && !tmdbId) return;
 
+    const QUALITY_WEIGHTS: Record<string, number> = {
+      '4K': 5,
+      '2160p': 5,
+      '1440p': 4,
+      '1080p': 3,
+      '720p': 2,
+      '480p': 1,
+      Auto: 0,
+    };
+
+    function sortStreamsByQuality(streams: StreamItem[]): StreamItem[] {
+      return streams.slice().sort((a, b) => {
+        const wA = QUALITY_WEIGHTS[a.quality] ?? -1;
+        const wB = QUALITY_WEIGHTS[b.quality] ?? -1;
+        if (wA !== wB) return wB - wA;
+        return 0;
+      });
+    }
+
     // Strategy 1: Direct in-browser resolution (zero middlemen, user's residential IP)
     if (scraperUrl && tmdbId) {
       try {
@@ -409,7 +430,7 @@ try {
             episode: mediaType === 'tv' ? episode : undefined,
           });
           if (resolvedStreams.length > 0) {
-            currentStreams = resolvedStreams;
+            currentStreams = sortStreamsByQuality(resolvedStreams);
             renderStreams();
             return;
           }
@@ -426,9 +447,10 @@ try {
         const res = await fetch(apiUrl);
         if (!res.ok) throw new Error('API failed');
         const data = await res.json() as { streams?: StreamItem[] };
-        currentStreams = data.streams || [];
+        const rawStreams = data.streams || [];
 
-        if (currentStreams.length > 0) {
+        if (rawStreams.length > 0) {
+          currentStreams = sortStreamsByQuality(rawStreams);
           renderStreams();
           return;
         }
