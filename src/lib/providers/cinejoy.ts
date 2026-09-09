@@ -12,7 +12,7 @@ export const cinejoyProvider: ScraperProvider = {
   id: 'cinejoy',
   name: 'Cinejoy',
   enabled: true,
-  priority: 2,
+  priority: 1,
   async resolve(tmdbId, mediaType, season, episode): Promise<Stream[]> {
     try {
       let url = `${BACKUP_EDGE}?tmdb=${encodeURIComponent(tmdbId)}&type=${mediaType === 'tv' ? 'series' : 'movie'}`;

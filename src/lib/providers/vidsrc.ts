@@ -127,17 +127,32 @@ async function resolveBackup(
   }
 }
 
+function filterPlayableStreams(streams: Stream[]): Stream[] {
+  return streams.filter((s) => {
+    if (!s.url) return false;
+    const lower = s.url.toLowerCase();
+    // Exclude domains that require restricted browser referer headers or are blocked
+    if (lower.includes('peakstorm.top') || lower.includes('keenanchor.top')) {
+      return false;
+    }
+    return true;
+  });
+}
+
 export const vidsrcProvider: ScraperProvider = {
   id: 'vidsrc',
   name: 'VidSrc',
   enabled: true,
-  priority: 1,
+  priority: 2,
   async resolve(tmdbId, mediaType, season, episode): Promise<Stream[]> {
     // 1. Try direct extraction
     const directStreams = await resolveDirect(tmdbId, mediaType, season, episode);
-    if (directStreams.length > 0) return directStreams;
+    const validDirect = filterPlayableStreams(directStreams);
+    if (validDirect.length > 0) return validDirect;
 
     // 2. Failover to edge mirror
-    return await resolveBackup(tmdbId, mediaType, season, episode);
+    const backupStreams = await resolveBackup(tmdbId, mediaType, season, episode);
+    return filterPlayableStreams(backupStreams);
   },
 };
+

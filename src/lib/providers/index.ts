@@ -14,8 +14,8 @@ import { cinejoyProvider } from './cinejoy';
  * To add a new provider in the future, just add it to this array.
  */
 export const PROVIDERS: ScraperProvider[] = [
-  vidsrcProvider,
   cinejoyProvider,
+  vidsrcProvider,
 ];
 
 const QUALITY_WEIGHTS: Record<string, number> = {
