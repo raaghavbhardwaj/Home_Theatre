@@ -221,8 +221,18 @@ const isHome = Astro.url.pathname === '/';
           return;
         }
 
+        interface SearchDialogItem {
+          id: number;
+          title: string;
+          poster_path?: string | null;
+          media_type: 'movie' | 'tv';
+          release_date?: string;
+          vote_average?: number;
+          imdb_id?: string;
+        }
+
         if (resultsContainer) {
-          resultsContainer.innerHTML = results.map((item: any) => {
+          resultsContainer.innerHTML = (results as SearchDialogItem[]).map((item) => {
             const year = item.release_date ? escapeHtml(item.release_date.substring(0, 4)) : '';
             const poster = item.poster_path 
               ? `https://image.tmdb.org/t/p/w92${escapeHtml(item.poster_path)}`
@@ -255,8 +265,8 @@ const isHome = Astro.url.pathname === '/';
             `;
           }).join('');
         }
-      } catch (err: any) {
-        if (err.name === 'AbortError') return;
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         if (statusEl) {
           statusEl.textContent = 'Search failed. Please try again.';
           statusEl.classList.remove('hidden');

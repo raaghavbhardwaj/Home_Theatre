@@ -63,3 +63,66 @@ export interface MediaDetails extends MediaItem {
   cast: CastMember[];
   trailer_key?: string | null;
 }
+
+/**
+ * Raw TMDB API response contracts (Layer 1: Schema)
+ */
+export interface RawTmdbItem {
+  id: number;
+  title?: string;
+  name?: string;
+  overview?: string;
+  poster_path?: string | null;
+  backdrop_path?: string | null;
+  media_type?: 'movie' | 'tv';
+  release_date?: string;
+  first_air_date?: string;
+  vote_average?: number;
+  imdb_id?: string;
+  external_ids?: { imdb_id?: string };
+}
+
+export interface RawTmdbFindResponse {
+  movie_results?: RawTmdbItem[];
+  tv_results?: RawTmdbItem[];
+}
+
+export interface RawTmdbSearchResponse {
+  results?: RawTmdbItem[];
+}
+
+export interface RawTmdbVideo {
+  site: string;
+  type: string;
+  key: string;
+  official?: boolean;
+}
+
+export interface RawTmdbCast {
+  id: number;
+  name: string;
+  character?: string;
+  profile_path?: string | null;
+}
+
+export interface RawTmdbDetailsResponse extends RawTmdbItem {
+  genres?: { id: number; name: string }[];
+  runtime?: number;
+  number_of_seasons?: number;
+  seasons?: Season[];
+  credits?: { cast?: RawTmdbCast[] };
+  videos?: { results?: RawTmdbVideo[] };
+}
+
+export interface RawTmdbSeasonEpisode {
+  episode_number: number;
+  season_number: number;
+  name?: string;
+  overview?: string;
+  still_path?: string | null;
+  air_date?: string;
+}
+
+export interface RawTmdbSeasonResponse {
+  episodes?: RawTmdbSeasonEpisode[];
+}

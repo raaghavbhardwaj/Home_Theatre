@@ -28,8 +28,9 @@ export const GET: APIRoute = async ({ url }) => {
   try {
     const results = await searchMedia(query);
     return new Response(JSON.stringify({ results }), { status: 200, headers: CORS_HEADERS });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ results: [], error: err.message }), {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Internal search error';
+    return new Response(JSON.stringify({ results: [], error: message }), {
       status: 500,
       headers: CORS_HEADERS,
     });

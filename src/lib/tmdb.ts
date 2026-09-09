@@ -4,7 +4,19 @@
  */
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMAGE_BASE } from './constants';
-import type { Episode, MediaDetails, MediaItem } from './types';
+import type {
+  Episode,
+  MediaDetails,
+  MediaItem,
+  RawTmdbCast,
+  RawTmdbDetailsResponse,
+  RawTmdbFindResponse,
+  RawTmdbItem,
+  RawTmdbSearchResponse,
+  RawTmdbSeasonEpisode,
+  RawTmdbSeasonResponse,
+  RawTmdbVideo,
+} from './types';
 
 /**
  * Returns full URL for a TMDB image.
@@ -20,7 +32,7 @@ export function getImageUrl(
 /**
  * Normalizes raw TMDB objects into clean MediaItem interfaces.
  */
-function toMediaItem(raw: any, fallbackType: 'movie' | 'tv' = 'movie'): MediaItem {
+function toMediaItem(raw: RawTmdbItem, fallbackType: 'movie' | 'tv' = 'movie'): MediaItem {
   const isTv = raw.media_type === 'tv' || Boolean(raw.first_air_date) || Boolean(raw.name);
   return {
     id: raw.id,
@@ -47,7 +59,7 @@ export async function resolveByImdbId(imdbId: string): Promise<MediaItem | null>
       `${TMDB_BASE_URL}/find/${cleanId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`
     );
     if (!res.ok) return null;
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as RawTmdbFindResponse;
 
     const movie = data.movie_results?.[0];
     if (movie) return toMediaItem({ ...movie, media_type: 'movie', imdb_id: cleanId });
@@ -68,8 +80,8 @@ export async function getTrending(type: 'all' | 'movie' | 'tv' = 'all'): Promise
   try {
     const res = await fetch(`${TMDB_BASE_URL}/trending/${type}/week?api_key=${TMDB_API_KEY}`);
     if (!res.ok) return [];
-    const data = (await res.json()) as any;
-    return (data.results || []).map((item: any) => toMediaItem(item));
+    const data = (await res.json()) as RawTmdbSearchResponse;
+    return (data.results || []).map((item: RawTmdbItem) => toMediaItem(item));
   } catch {
     return [];
   }
@@ -84,8 +96,8 @@ export async function getByGenre(genreId: number, type: 'movie' | 'tv' = 'movie'
       `${TMDB_BASE_URL}/discover/${type}?api_key=${TMDB_API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&vote_count.gte=150`
     );
     if (!res.ok) return [];
-    const data = (await res.json()) as any;
-    return (data.results || []).map((item: any) => toMediaItem(item, type));
+    const data = (await res.json()) as RawTmdbSearchResponse;
+    return (data.results || []).map((item: RawTmdbItem) => toMediaItem(item, type));
   } catch {
     return [];
   }
@@ -109,10 +121,10 @@ export async function searchMedia(query: string): Promise<MediaItem[]> {
       `${TMDB_BASE_URL}/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(trimmed)}&include_adult=false`
     );
     if (!res.ok) return [];
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as RawTmdbSearchResponse;
     return (data.results || [])
-      .filter((i: any) => i.media_type === 'movie' || i.media_type === 'tv')
-      .map((i: any) => toMediaItem(i));
+      .filter((i: RawTmdbItem) => i.media_type === 'movie' || i.media_type === 'tv')
+      .map((i: RawTmdbItem) => toMediaItem(i));
   } catch {
     return [];
   }
@@ -130,7 +142,7 @@ export async function getMediaDetails(
       `${TMDB_BASE_URL}/${type}/${id}?api_key=${TMDB_API_KEY}&append_to_response=credits,videos,external_ids`
     );
     if (!res.ok) return null;
-    const raw = (await res.json()) as any;
+    const raw = (await res.json()) as RawTmdbDetailsResponse;
 
     const base = toMediaItem(raw, type);
     const imdb_id = raw.imdb_id || raw.external_ids?.imdb_id;
@@ -139,12 +151,12 @@ export async function getMediaDetails(
     let trailer_key: string | null = null;
     if (raw.videos?.results && Array.isArray(raw.videos.results)) {
       const official = raw.videos.results.find(
-        (v: any) => v.site === 'YouTube' && v.type === 'Trailer' && v.official
+        (v: RawTmdbVideo) => v.site === 'YouTube' && v.type === 'Trailer' && v.official
       );
-      trailer_key = official?.key || raw.videos.results.find((v: any) => v.site === 'YouTube')?.key || null;
+      trailer_key = official?.key || raw.videos.results.find((v: RawTmdbVideo) => v.site === 'YouTube')?.key || null;
     }
 
-    const cast = (raw.credits?.cast || []).slice(0, 10).map((c: any) => ({
+    const cast = (raw.credits?.cast || []).slice(0, 10).map((c: RawTmdbCast) => ({
       id: c.id,
       name: c.name,
       character: c.character || 'Cast',
@@ -157,7 +169,7 @@ export async function getMediaDetails(
       genres: raw.genres || [],
       runtime: raw.runtime,
       number_of_seasons: raw.number_of_seasons,
-      seasons: (raw.seasons || []).filter((s: any) => s.season_number > 0),
+      seasons: (raw.seasons || []).filter((s) => s.season_number > 0),
       cast,
       trailer_key,
     };
@@ -173,8 +185,8 @@ export async function getSeasonEpisodes(id: string | number, season: number): Pr
   try {
     const res = await fetch(`${TMDB_BASE_URL}/tv/${id}/season/${season}?api_key=${TMDB_API_KEY}`);
     if (!res.ok) return [];
-    const data = (await res.json()) as any;
-    return (data.episodes || []).map((e: any) => ({
+    const data = (await res.json()) as RawTmdbSeasonResponse;
+    return (data.episodes || []).map((e: RawTmdbSeasonEpisode) => ({
       episode_number: e.episode_number,
       season_number: e.season_number,
       name: e.name || `Episode ${e.episode_number}`,
