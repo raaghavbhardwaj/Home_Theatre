@@ -47,6 +47,7 @@ if (queryParam.trim()) {
           aria-label="Search movies, TV shows, or paste IMDb ID"
           role="combobox"
           aria-autocomplete="list"
+          aria-haspopup="listbox"
           aria-expanded={initialResults.length > 0 ? "true" : "false"}
           aria-controls="spotlight-results"
           class="w-full bg-transparent text-base sm:text-lg text-white placeholder-neutral-500 focus:outline-none font-sans"
@@ -74,84 +75,101 @@ if (queryParam.trim()) {
         Searching...
       </div>
 
-      <!-- Results Container -->
-      <div id="spotlight-results" role="listbox" aria-label="Search results" class="max-h-[60vh] overflow-y-auto divide-y divide-[#1c1c1c] p-2 space-y-1">
-        {initialResults.length > 0 ? (
-          initialResults.map((item) => {
-            const year = item.release_date ? item.release_date.substring(0, 4) : '';
-            const poster = item.poster_path
-              ? `https://image.tmdb.org/t/p/w92${item.poster_path}`
-              : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="60" viewBox="0 0 40 60"%3E%3Crect width="40" height="60" fill="%23222"/%3E%3C/svg%3E';
-            const watchUrl = item.imdb_id
-              ? `/watch?imdb=${encodeURIComponent(item.imdb_id)}`
-              : `/watch?id=${encodeURIComponent(item.id)}&type=${encodeURIComponent(item.media_type)}`;
+      <!-- No Results Status Message -->
+      <div
+        id="spotlight-empty"
+        role="status"
+        aria-live="polite"
+        class={`py-12 text-center text-xs font-mono text-neutral-400 ${queryParam && initialResults.length === 0 ? '' : 'hidden'}`}
+      >
+        {queryParam ? `No titles found for "${queryParam}"` : ''}
+      </div>
 
-            return (
-              <a
-                href={watchUrl}
-                role="option"
-                class="spotlight-item flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-neutral-800/80 transition-all group"
-              >
-                <img
-                  src={poster}
-                  alt=""
-                  width="44"
-                  height="64"
-                  decoding="async"
-                  class="w-11 h-16 object-cover rounded-md bg-neutral-900 shrink-0 border border-neutral-800"
-                  loading="lazy"
-                />
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 mb-1">
-                    <span class="text-sm font-semibold text-white group-hover:text-neutral-100 truncate">
-                      {item.title}
-                    </span>
-                    <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-700 text-neutral-400">
-                      {item.media_type}
-                    </span>
-                  </div>
-                  <div class="flex items-center gap-3 text-xs font-mono text-neutral-400">
-                    {year && <span>{year}</span>}
-                    {item.vote_average > 0 && (
-                      <span class="text-amber-400/90 font-medium">★ {item.vote_average}</span>
-                    )}
-                    {item.imdb_id && (
-                      <span class="text-neutral-400">{item.imdb_id}</span>
-                    )}
-                  </div>
+      <!-- Initial Suggestions & Prompts (Standard Semantic DOM, NOT inside role="listbox") -->
+      <div
+        id="spotlight-suggestions"
+        class={`py-8 px-4 flex flex-col items-center text-center ${queryParam ? 'hidden' : ''}`}
+      >
+        <p class="text-xs font-mono text-neutral-500 mb-4">
+          Type any title name or paste an IMDb ID to begin
+        </p>
+        <div class="flex flex-wrap items-center justify-center gap-2">
+          <span class="text-[11px] font-mono text-neutral-600">Try:</span>
+          {['Interstellar', 'Fight Club', 'Breaking Bad', 'Severance', 'Dune'].map((sample) => (
+            <button
+              type="button"
+              data-sample={sample}
+              aria-label={`Search ${sample}`}
+              class="sample-btn min-h-[36px] px-3 py-1.5 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors"
+            >
+              {sample}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <!-- Results Listbox (Contains ONLY role="option" children when visible, hidden otherwise) -->
+      <div
+        id="spotlight-results"
+        role="listbox"
+        aria-label="Search results"
+        class={`max-h-[60vh] overflow-y-auto divide-y divide-[#1c1c1c] p-2 space-y-1 ${initialResults.length > 0 ? '' : 'hidden'}`}
+      >
+        {initialResults.map((item, idx) => {
+          const year = item.release_date ? item.release_date.substring(0, 4) : '';
+          const poster = item.poster_path
+            ? `https://image.tmdb.org/t/p/w92${item.poster_path}`
+            : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="60" viewBox="0 0 40 60"%3E%3Crect width="40" height="60" fill="%23222"/%3E%3C/svg%3E';
+          const watchUrl = item.imdb_id
+            ? `/watch?imdb=${encodeURIComponent(item.imdb_id)}`
+            : `/watch?id=${encodeURIComponent(item.id)}&type=${encodeURIComponent(item.media_type)}`;
+
+          return (
+            <a
+              id={`spotlight-opt-${idx}`}
+              href={watchUrl}
+              role="option"
+              aria-selected="false"
+              aria-label={`${item.title} (${item.media_type.toUpperCase()})`}
+              class="spotlight-item flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-neutral-800/80 transition-all group"
+            >
+              <img
+                src={poster}
+                alt=""
+                width="44"
+                height="64"
+                decoding="async"
+                class="w-11 h-16 object-cover rounded-md bg-neutral-900 shrink-0 border border-neutral-800"
+                loading="lazy"
+              />
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-sm font-semibold text-white group-hover:text-neutral-100 truncate">
+                    {item.title}
+                  </span>
+                  <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-700 text-neutral-400">
+                    {item.media_type}
+                  </span>
                 </div>
-                <div class="shrink-0 flex items-center text-neutral-600 group-hover:text-white transition-colors">
-                  <span class="hidden sm:inline font-mono text-[11px] mr-1 text-neutral-400 group-hover:text-neutral-200">PLAY</span>
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
+                <div class="flex items-center gap-3 text-xs font-mono text-neutral-400">
+                  {year && <span>{year}</span>}
+                  {item.vote_average > 0 && (
+                    <span class="text-amber-400/90 font-medium">★ {item.vote_average}</span>
+                  )}
+                  {item.imdb_id && (
+                    <span class="text-neutral-400">{item.imdb_id}</span>
+                  )}
                 </div>
-              </a>
-            );
-          })
-        ) : queryParam ? (
-          <div class="py-12 text-center text-xs font-mono text-neutral-400" role="status">
-            No titles found for "{queryParam}"
-          </div>
-        ) : (
-          <div class="py-8 px-4 flex flex-col items-center text-center">
-            <p class="text-xs font-mono text-neutral-500 mb-4">
-              Type any title name or paste an IMDb ID to begin
-            </p>
-            <div class="flex flex-wrap items-center justify-center gap-2">
-              <span class="text-[11px] font-mono text-neutral-600">Try:</span>
-              {['Interstellar', 'Fight Club', 'Breaking Bad', 'Severance', 'Dune'].map((sample) => (
-                <button
-                  type="button"
-                  data-sample={sample}
-                  class="sample-btn px-2.5 py-1 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors"
-                >
-                  {sample}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+              </div>
+              <div class="shrink-0 flex items-center text-neutral-600 group-hover:text-white transition-colors">
+                <span class="hidden sm:inline font-mono text-[11px] mr-1 text-neutral-400 group-hover:text-neutral-200">PLAY</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </a>
+          );
+        })}
       </div>
 
       <!-- Keyboard Navigation Helper Footer -->
@@ -184,6 +202,8 @@ if (queryParam.trim()) {
   const input = document.getElementById('spotlight-input') as HTMLInputElement | null;
   const clearBtn = document.getElementById('spotlight-clear-btn');
   const resultsContainer = document.getElementById('spotlight-results');
+  const suggestionsContainer = document.getElementById('spotlight-suggestions');
+  const emptyContainer = document.getElementById('spotlight-empty');
   const statusEl = document.getElementById('spotlight-status');
 
   let debounceTimer: number | undefined;
@@ -237,7 +257,7 @@ if (queryParam.trim()) {
     }
 
     const items = resultsContainer?.querySelectorAll('a.spotlight-item') || [];
-    if (items.length === 0) return;
+    if (items.length === 0 || resultsContainer?.classList.contains('hidden')) return;
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -264,23 +284,14 @@ if (queryParam.trim()) {
     input?.setAttribute('aria-expanded', 'false');
     input?.removeAttribute('aria-activedescendant');
     if (resultsContainer) {
-      resultsContainer.innerHTML = `
-        <div class="py-8 px-4 flex flex-col items-center text-center">
-          <p class="text-xs font-mono text-neutral-400 mb-4">
-            Type any title name or paste an IMDb ID to begin
-          </p>
-          <div class="flex flex-wrap items-center justify-center gap-2">
-            <span class="text-[11px] font-mono text-neutral-400">Try:</span>
-            <button type="button" data-sample="Interstellar" aria-label="Search Interstellar" class="sample-btn min-h-[36px] px-3.5 py-1.5 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Interstellar</button>
-            <button type="button" data-sample="Fight Club" aria-label="Search Fight Club" class="sample-btn min-h-[36px] px-3.5 py-1.5 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Fight Club</button>
-            <button type="button" data-sample="Breaking Bad" aria-label="Search Breaking Bad" class="sample-btn min-h-[36px] px-3.5 py-1.5 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Breaking Bad</button>
-            <button type="button" data-sample="Severance" aria-label="Search Severance" class="sample-btn min-h-[36px] px-3.5 py-1.5 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Severance</button>
-            <button type="button" data-sample="Dune" aria-label="Search Dune" class="sample-btn min-h-[36px] px-3.5 py-1.5 rounded bg-[#1c1c1c] hover:bg-[#282828] border border-[#2a2a2a] text-neutral-300 font-mono text-xs cursor-pointer transition-colors">Dune</button>
-          </div>
-        </div>
-      `;
-      bindSampleButtons();
+      resultsContainer.innerHTML = '';
+      resultsContainer.classList.add('hidden');
     }
+    if (emptyContainer) {
+      emptyContainer.textContent = '';
+      emptyContainer.classList.add('hidden');
+    }
+    suggestionsContainer?.classList.remove('hidden');
     if (statusEl) statusEl.classList.add('hidden');
   }
 
@@ -320,6 +331,12 @@ if (queryParam.trim()) {
       return;
     }
 
+    suggestionsContainer?.classList.add('hidden');
+    if (emptyContainer) {
+      emptyContainer.textContent = '';
+      emptyContainer.classList.add('hidden');
+    }
+
     if (searchAbortController) {
       searchAbortController.abort();
     }
@@ -342,8 +359,14 @@ if (queryParam.trim()) {
       if (statusEl) statusEl.classList.add('hidden');
 
       if (!results.length) {
+        input?.setAttribute('aria-expanded', 'false');
         if (resultsContainer) {
-          resultsContainer.innerHTML = `<div class="py-12 text-center text-xs font-mono text-neutral-500">No titles found for "${escapeHtml(trimmed)}"</div>`;
+          resultsContainer.innerHTML = '';
+          resultsContainer.classList.add('hidden');
+        }
+        if (emptyContainer) {
+          emptyContainer.textContent = `No titles found for "${trimmed}"`;
+          emptyContainer.classList.remove('hidden');
         }
         return;
       }
@@ -377,6 +400,7 @@ if (queryParam.trim()) {
               href="${watchUrl}"
               role="option"
               aria-selected="false"
+              aria-label="${safeTitle} (${safeType.toUpperCase()})"
               class="spotlight-item flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-neutral-800/80 transition-all group"
             >
               <img
@@ -408,6 +432,7 @@ if (queryParam.trim()) {
             </a>
           `;
         }).join('');
+        resultsContainer.classList.remove('hidden');
         input?.setAttribute('aria-expanded', 'true');
       }
     } catch (err: unknown) {
